@@ -4,7 +4,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>ModManager</AssemblyName>
     <RootNamespace>ModManager</RootNamespace>
-    <Version>1.2.1</Version>
+    <Version>1.3.2</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>$(ErosArtifactsDir)\$(MSBuildProjectName)\$(Configuration)\</OutputPath>

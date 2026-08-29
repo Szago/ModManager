@@ -10,6 +10,7 @@ namespace ModManager
         internal static Button Install(
             Button button30,
             Button button60,
+            Button visualSource,
             Action onClick)
         {
             Transform parent = button60.transform.parent;
@@ -18,13 +19,13 @@ namespace ModManager
             if (marker != null)
                 return marker.GetComponent<Button>();
 
-            Button button = UnityEngine.Object.Instantiate(button60, parent, false);
-            button.name = "ModManager_TestButton";
+            Button button = UnityEngine.Object.Instantiate(visualSource, parent, false);
+            button.name = "ModManager_OpenButton";
             button.gameObject.AddComponent<SettingsButtonMarker>();
             button.onClick = new Button.ButtonClickedEvent();
             button.onClick.AddListener(() => onClick());
             RemoveLocalizationComponents(button.gameObject);
-            SetButtonLabel(button, "TEST");
+            SetButtonLabel(button, "MOD MANAGER");
 
             LayoutElement layoutElement = button.GetComponent<LayoutElement>();
             if (layoutElement == null)
@@ -37,13 +38,63 @@ namespace ModManager
             RectTransform buttonRect = button.transform as RectTransform;
             if (sourceRect != null && buttonRect != null)
             {
+                buttonRect.anchorMin = sourceRect.anchorMin;
+                buttonRect.anchorMax = sourceRect.anchorMax;
+                buttonRect.pivot = sourceRect.pivot;
+                buttonRect.sizeDelta = sourceRect.sizeDelta;
+                buttonRect.SetSizeWithCurrentAnchors(
+                    RectTransform.Axis.Horizontal,
+                    360f);
+                buttonRect.localScale = sourceRect.localScale;
+                buttonRect.localRotation = sourceRect.localRotation;
                 buttonRect.anchoredPosition =
-                    sourceRect.anchoredPosition + new Vector2(-440f, -105f);
+                    sourceRect.anchoredPosition + new Vector2(-440f, -155f);
             }
 
             button.interactable = true;
             button.gameObject.SetActive(true);
             return button;
+        }
+
+        internal static Button FindClaimButton()
+        {
+            const string claimPath =
+                "Canvas_Settings/Panel_Settings/Panel_Settings/Panel_Settings/" +
+                "RighSide/Panel Promo Code/Button Claim";
+
+            GameObject exactObject = GameObject.Find(claimPath);
+            if (exactObject != null)
+            {
+                Button exactButton = exactObject.GetComponent<Button>() ??
+                                     exactObject.GetComponentInChildren<Button>(true);
+                if (exactButton != null)
+                    return exactButton;
+            }
+
+            foreach (Button candidate in Resources.FindObjectsOfTypeAll<Button>())
+            {
+                if (candidate == null ||
+                    !candidate.gameObject.scene.IsValid() ||
+                    candidate.name != "Button Claim")
+                    continue;
+
+                bool insidePromoPanel = false;
+                bool insideRightSide = false;
+                Transform current = candidate.transform.parent;
+                while (current != null)
+                {
+                    if (current.name == "Panel Promo Code")
+                        insidePromoPanel = true;
+                    if (current.name == "RighSide")
+                        insideRightSide = true;
+                    current = current.parent;
+                }
+
+                if (insidePromoPanel && insideRightSide)
+                    return candidate;
+            }
+
+            return null;
         }
 
         internal static void SetButtonLabel(Button button, string label)

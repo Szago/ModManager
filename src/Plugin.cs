@@ -11,7 +11,7 @@ namespace ModManager
     {
         public const string PluginGuid = "com.jaqb.eros.modmanager";
         public const string PluginName = "Mod Manager";
-        public const string PluginVersion = "1.2.1";
+        public const string PluginVersion = "1.3.2";
 
         private const float UiScanInterval = 5f;
 
@@ -26,6 +26,7 @@ namespace ModManager
         private float _nextUiScan;
         private ModRegistry _registry;
         private ManagerUi _managerUi;
+        private bool _loggedMissingClaimButton;
 
         internal static Plugin Instance { get; private set; }
 
@@ -133,15 +134,28 @@ namespace ModManager
             if (button30 == null || button60 == null)
                 return;
 
+            Button claimButton = SettingsButton.FindClaimButton();
+            if (claimButton == null)
+            {
+                if (!_loggedMissingClaimButton)
+                {
+                    Logger.LogInfo("[ModManager] Waiting for the Promo Code claim-button template.");
+                    _loggedMissingClaimButton = true;
+                }
+                return;
+            }
+
+            _loggedMissingClaimButton = false;
             _button30 = button30;
             _button60 = button60;
             _testButton = SettingsButton.Install(
                 button30,
                 button60,
+                claimButton,
                 OpenManager);
 
             if (_testButton != null)
-                Logger.LogInfo("[ModManager] TEST button attached with RefreshRateLimit's exact flow.");
+                Logger.LogInfo("[ModManager] Promo Code claim-button clone attached to the FPS controls.");
         }
 
         private void OpenManager()
