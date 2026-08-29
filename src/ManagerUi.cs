@@ -15,6 +15,11 @@ namespace ModManager
             170f / 255f,
             23f / 255f,
             1f);
+        private static readonly Color DividerColor = new Color(
+            187f / 255f,
+            132f / 255f,
+            119f / 255f,
+            1f);
         private static readonly Color HeaderText = new Color(
             16f / 255f,
             11f / 255f,
@@ -28,10 +33,11 @@ namespace ModManager
         private GameObject _overlayCanvasObject;
         private GameObject _canvasObject;
         private GameObject _nativeCloseObject;
-        private GameObject _inputBlockerObject;
         private GameObject _sourceSettingsCanvasObject;
         private GameObject _panel;
         private RectTransform _content;
+        private RectTransform _listViewport;
+        private GridLayoutGroup _gridLayout;
         private TMP_Text _footer;
         private Sprite _rowBackgroundSprite;
 
@@ -48,16 +54,17 @@ namespace ModManager
             RefreshRows();
             _overlayCanvasObject.transform.SetAsLastSibling();
             _overlayCanvasObject.SetActive(true);
-            _inputBlockerObject.transform.SetAsLastSibling();
-            _inputBlockerObject.SetActive(true);
             _canvasObject.transform.SetAsLastSibling();
             _canvasObject.SetActive(true);
+            _panel.transform.SetAsLastSibling();
+            _panel.SetActive(true);
             if (_nativeCloseObject != null)
             {
                 _nativeCloseObject.transform.SetAsLastSibling();
                 _nativeCloseObject.SetActive(true);
             }
-            _panel.SetActive(true);
+            Canvas.ForceUpdateCanvases();
+            UpdateGridLayout();
             _sourceSettingsCanvasObject.SetActive(false);
             _logger.LogInfo(
                 "[ModManager] Set Canvas_Settings inactive and opened the independent manager canvas.");
@@ -142,21 +149,6 @@ namespace ModManager
             if (background != null)
                 background.SetSiblingIndex(Mathf.Min(1, _canvasObject.transform.childCount - 1));
 
-            _inputBlockerObject = UiFactory.Object(
-                "ModManager_FullCanvasInputBlocker",
-                overlayParent);
-            UiFactory.Rect(
-                _inputBlockerObject,
-                Vector2.zero,
-                Vector2.one,
-                Vector2.zero,
-                Vector2.zero);
-            UiFactory.Image(
-                _inputBlockerObject,
-                new Color(0f, 0f, 0f, 0.001f),
-                true);
-            _inputBlockerObject.SetActive(false);
-
             _panel = UiFactory.Object(
                 "ModManager_InjectedContent",
                 _canvasObject.transform);
@@ -167,6 +159,11 @@ namespace ModManager
                 new Vector2(70f, 55f),
                 new Vector2(-70f, -55f));
             UiFactory.Image(_panel, new Color(0f, 0f, 0f, 0.01f));
+            CanvasGroup interactionGroup = _panel.AddComponent<CanvasGroup>();
+            interactionGroup.alpha = 1f;
+            interactionGroup.interactable = true;
+            interactionGroup.blocksRaycasts = true;
+            interactionGroup.ignoreParentGroups = true;
 
             string gameFont = UiFactory.CaptureGameFont(settingsCanvasRoot);
             _logger.LogInfo(
@@ -178,15 +175,15 @@ namespace ModManager
             if (_rowBackgroundSprite != null)
                 _logger.LogInfo(
                     "[ModManager] Loaded TeamPresets UI_BG_Paper row texture.");
-
             CreateHeader();
             CreateInfo();
             CreateList();
             CreateFooter();
+            _panel.transform.SetParent(overlayParent, true);
             _panel.transform.SetAsLastSibling();
             _overlayCanvasObject.SetActive(false);
             _logger.LogInfo(
-                "[ModManager] Created an independent manager canvas beside Canvas_Settings.");
+                "[ModManager] Created an independent manager canvas; interactive content is a direct canvas child.");
         }
 
         private void CloneSettingsBackdrop(
@@ -209,7 +206,7 @@ namespace ModManager
             backdrop.SetActive(true);
             foreach (Graphic graphic in
                      backdrop.GetComponentsInChildren<Graphic>(true))
-                graphic.raycastTarget = false;
+                graphic.raycastTarget = true;
             backdrop.transform.SetAsFirstSibling();
             _logger.LogInfo(
                 "[ModManager] Cloned Canvas_Settings/Background into the manager canvas.");
@@ -455,7 +452,7 @@ namespace ModManager
             GameObject line = UiFactory.Object("HeaderLine", _panel.transform);
             UiFactory.Rect(line, new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(48f, -204f), new Vector2(-48f, -196f));
-            UiFactory.Image(line, Accent, false);
+            UiFactory.Image(line, DividerColor, false);
         }
 
         private void CreateInfo()
@@ -479,27 +476,45 @@ namespace ModManager
 
         private void RefreshRows()
         {
-            foreach (GameObject row in _rows) Object.Destroy(row);
+            foreach (GameObject row in _rows)
+            {
+                if (row != null)
+                    row.transform.SetParent(null, false);
+                Object.Destroy(row);
+            }
             _rows.Clear();
             foreach (ManagedMod mod in _registry.Mods) CreateModRow(mod);
             _footer.text = _registry.Mods.Count == 0
-                ? "No manageable BepInEx plugins were found."
-                : "Mod Manager and BepInEx are protected and never appear in this list.";
+                ? "No mods integrated with the Mod Manager API were found."
+                : "Only API-integrated mods appear here. Mod Manager is always enabled.";
         }
 
         private void CreateList()
         {
-            GameObject viewport = UiFactory.Object("Viewport", _panel.transform);
-            UiFactory.Rect(viewport, Vector2.zero, Vector2.one,
+            GameObject scrollObject =
+                UiFactory.Object("ModListScroll", _panel.transform);
+            RectTransform scrollRectTransform = UiFactory.Rect(
+                scrollObject,
+                Vector2.zero,
+                Vector2.one,
                 new Vector2(48f, 190f), new Vector2(-48f, -330f));
-            UiFactory.Image(viewport, new Color(0f, 0f, 0f, 0.16f));
-            viewport.AddComponent<RectMask2D>();
 
-            ScrollRect scroll = viewport.AddComponent<ScrollRect>();
+            ScrollRect scroll = scrollObject.AddComponent<ScrollRect>();
             scroll.horizontal = false;
             scroll.vertical = true;
-            scroll.scrollSensitivity = 68f;
+            scroll.inertia = true;
+            scroll.scrollSensitivity = 100f;
             scroll.movementType = ScrollRect.MovementType.Clamped;
+
+            GameObject viewport = UiFactory.Object("Viewport", scrollObject.transform);
+            _listViewport = UiFactory.Rect(
+                viewport,
+                Vector2.zero,
+                Vector2.one,
+                Vector2.zero,
+                Vector2.zero);
+            UiFactory.Image(viewport, new Color(0f, 0f, 0f, 0.16f));
+            viewport.AddComponent<RectMask2D>();
 
             GameObject contentObject = UiFactory.Object("Content", viewport.transform);
             _content = UiFactory.Rect(contentObject,
@@ -507,18 +522,42 @@ namespace ModManager
                 Vector2.zero, Vector2.zero);
             _content.pivot = new Vector2(0.5f, 1f);
 
-            VerticalLayoutGroup layout = contentObject.AddComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(20, 20, 20, 20);
-            layout.spacing = 20f;
-            layout.childControlHeight = true;
-            layout.childControlWidth = true;
-            layout.childForceExpandHeight = false;
-            layout.childForceExpandWidth = true;
+            _gridLayout = contentObject.AddComponent<GridLayoutGroup>();
+            _gridLayout.padding = new RectOffset(20, 20, 20, 20);
+            _gridLayout.spacing = new Vector2(20f, 20f);
+            _gridLayout.cellSize = new Vector2(720f, 188f);
+            _gridLayout.startCorner = GridLayoutGroup.Corner.UpperLeft;
+            _gridLayout.startAxis = GridLayoutGroup.Axis.Horizontal;
+            _gridLayout.childAlignment = TextAnchor.UpperLeft;
+            _gridLayout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            _gridLayout.constraintCount = 2;
 
             ContentSizeFitter fitter = contentObject.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             scroll.viewport = viewport.GetComponent<RectTransform>();
             scroll.content = _content;
+        }
+
+        private void UpdateGridLayout()
+        {
+            if (_gridLayout == null || _listViewport == null)
+                return;
+
+            float availableWidth =
+                _listViewport.rect.width -
+                _gridLayout.padding.left -
+                _gridLayout.padding.right -
+                _gridLayout.spacing.x;
+            if (availableWidth <= 0f)
+                return;
+
+            float cellWidth = availableWidth * 0.5f;
+            _gridLayout.cellSize = new Vector2(cellWidth, 188f);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
+            _logger.LogInfo(
+                "[ModManager] Two-column grid width=" +
+                _listViewport.rect.width.ToString("0.0") +
+                ", cell width=" + cellWidth.ToString("0.0") + ".");
         }
 
         private void CreateFooter()
@@ -577,25 +616,40 @@ namespace ModManager
             UiFactory.Rect(status.gameObject, Vector2.zero, Vector2.one,
                 new Vector2(36f, 14f), new Vector2(-260f, -136f));
 
-            Toggle toggle = CreateToggle(row.transform, mod.DesiredEnabled);
-            toggle.onValueChanged.AddListener(enabled =>
+            bool desiredState = mod.DesiredEnabled;
+            Image enabledVisual;
+            Button toggle = CreateToggle(
+                row.transform,
+                desiredState,
+                out enabledVisual);
+            toggle.onClick.AddListener(() =>
             {
+                bool enabled = !desiredState;
                 try
                 {
+                    _logger.LogInfo(
+                        "[ModManager] Toggle event: " + mod.Guid +
+                        " => " + enabled + ".");
                     _footer.text = _registry.SetDesiredState(mod, enabled);
+                    desiredState = enabled;
+                    SetToggleVisual(enabledVisual, desiredState);
                     status.text = StatusText(mod);
                     status.color = StatusColor(mod);
                 }
                 catch (System.Exception exception)
                 {
                     _logger.LogError("[ModManager] Could not change " + mod.Name + ": " + exception);
-                    toggle.SetIsOnWithoutNotify(mod.DesiredEnabled);
-                    _footer.text = "The change could not be staged. Check BepInEx\\LogOutput.log.";
+                    desiredState = mod.DesiredEnabled;
+                    SetToggleVisual(enabledVisual, desiredState);
+                    _footer.text = "The state could not be saved. Check BepInEx\\LogOutput.log.";
                 }
             });
         }
 
-        private static Toggle CreateToggle(Transform parent, bool enabled)
+        private static Button CreateToggle(
+            Transform parent,
+            bool enabled,
+            out Image enabledVisual)
         {
             GameObject root = UiFactory.Object("RestartToggle", parent);
             UiFactory.Rect(root, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
@@ -608,15 +662,30 @@ namespace ModManager
             GameObject checkObject = UiFactory.Object("Enabled", root.transform);
             UiFactory.Rect(checkObject, Vector2.zero, Vector2.one,
                 new Vector2(10f, 10f), new Vector2(-10f, -10f));
-            Image check = UiFactory.Image(checkObject, new Color(0.40f, 0.82f, 0.48f, 1f), false);
+            Image check = UiFactory.Image(
+                checkObject,
+                new Color(233f / 255f, 155f / 255f, 22f / 255f, 1f),
+                false);
 
-            Toggle toggle = root.AddComponent<Toggle>();
-            toggle.targetGraphic = background;
-            toggle.graphic = check;
-            toggle.transition = Selectable.Transition.ColorTint;
-            toggle.SetIsOnWithoutNotify(enabled);
-            check.canvasRenderer.SetAlpha(enabled ? 1f : 0f);
-            return toggle;
+            Button button = root.AddComponent<Button>();
+            button.targetGraphic = background;
+            button.transition = Selectable.Transition.ColorTint;
+            ColorBlock colors = button.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(1f, 0.88f, 0.55f, 1f);
+            colors.pressedColor = new Color(0.82f, 0.58f, 0.16f, 1f);
+            colors.selectedColor = colors.highlightedColor;
+            button.colors = colors;
+            button.interactable = true;
+            enabledVisual = check;
+            SetToggleVisual(enabledVisual, enabled);
+            return button;
+        }
+
+        private static void SetToggleVisual(Image visual, bool enabled)
+        {
+            if (visual != null)
+                visual.gameObject.SetActive(enabled);
         }
 
         private static string StatusText(ManagedMod mod)
