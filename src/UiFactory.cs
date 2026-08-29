@@ -1,13 +1,32 @@
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
+using TMPro;
 
 namespace ModManager
 {
     internal static class UiFactory
     {
         private static Font _font;
+        private static TMP_FontAsset _gameTmpFont;
         internal static Font Font => _font ?? (_font = Resources.GetBuiltinResource<Font>("Arial.ttf"));
+
+        internal static string CaptureGameFont(Transform source)
+        {
+            if (source == null)
+                return null;
+
+            foreach (TMP_Text text in source.GetComponentsInChildren<TMP_Text>(true))
+            {
+                if (text != null && text.font != null)
+                {
+                    _gameTmpFont = text.font;
+                    return _gameTmpFont.name;
+                }
+            }
+
+            return null;
+        }
 
         internal static GameObject Object(string name, Transform parent)
         {
@@ -57,6 +76,27 @@ namespace ModManager
             text.alignment = alignment;
             text.color = color;
             text.raycastTarget = false;
+            return text;
+        }
+
+        internal static TextMeshProUGUI TmpText(
+            string name,
+            Transform parent,
+            string value,
+            float size,
+            TextAlignmentOptions alignment,
+            Color color)
+        {
+            GameObject gameObject = Object(name, parent);
+            TextMeshProUGUI text = gameObject.AddComponent<TextMeshProUGUI>();
+            text.font = _gameTmpFont ?? TMP_Settings.defaultFontAsset;
+            text.text = value;
+            text.fontSize = size;
+            text.alignment = alignment;
+            text.color = color;
+            text.raycastTarget = false;
+            text.enableWordWrapping = false;
+            text.overflowMode = TextOverflowModes.Ellipsis;
             return text;
         }
 

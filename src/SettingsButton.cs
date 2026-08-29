@@ -97,6 +97,23 @@ namespace ModManager
             return null;
         }
 
+        internal static Transform FindSettingsShell(Transform origin)
+        {
+            Transform current = origin;
+            while (current != null)
+            {
+                if (current.Find("Settings_BG") != null &&
+                    current.Find("Panel Frame") != null)
+                    return current;
+                current = current.parent;
+            }
+
+            const string shellPath =
+                "Canvas_Settings/Panel_Settings/Panel_Settings";
+            GameObject exactObject = GameObject.Find(shellPath);
+            return exactObject != null ? exactObject.transform : null;
+        }
+
         internal static void SetButtonLabel(Button button, string label)
         {
             foreach (TextMeshProUGUI text in

@@ -11,7 +11,7 @@ namespace ModManager
     {
         public const string PluginGuid = "com.jaqb.eros.modmanager";
         public const string PluginName = "Mod Manager";
-        public const string PluginVersion = "1.3.2";
+        public const string PluginVersion = "1.5.1";
 
         private const float UiScanInterval = 5f;
 
@@ -163,10 +163,10 @@ namespace ModManager
             try
             {
                 _registry.Discover();
-                _managerUi.Show(
-                    _testButton != null
-                        ? _testButton.GetComponentInParent<Canvas>()
-                        : null);
+                Transform settingsShell = _testButton != null
+                    ? SettingsButton.FindSettingsShell(_testButton.transform)
+                    : null;
+                _managerUi.Show(settingsShell);
             }
             catch (Exception exception)
             {
