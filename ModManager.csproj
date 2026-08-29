@@ -1,0 +1,77 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net471</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>ModManager</AssemblyName>
+    <RootNamespace>ModManager</RootNamespace>
+    <Version>1.2.1</Version>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>$(ErosArtifactsDir)\$(MSBuildProjectName)\$(Configuration)\</OutputPath>
+    <DebugType>portable</DebugType>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="assets\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(ErosManagedDir)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>$(ErosBepInExCoreDir)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(ErosBepInExCoreDir)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(ErosManagedDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ErosManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ErosManagedDir)\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(ErosManagedDir)\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(ErosManagedDir)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(ErosManagedDir)\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="helper\ModManager.FileApplier.csproj"
+                      ReferenceOutputAssembly="false" />
+    <Compile Remove="helper\**\*.cs" />
+  </ItemGroup>
+
+  <Target Name="ValidateErosPaths" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(ErosManagedDir)\Assembly-CSharp.dll')"
+           Text="Game assemblies were not found at '$(ErosManagedDir)'. Update config\Local.props." />
+    <Error Condition="!Exists('$(ErosBepInExCoreDir)\BepInEx.dll')"
+           Text="BepInEx was not found at '$(ErosBepInExCoreDir)'. Update config\Local.props." />
+  </Target>
+
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(Deploy)' == 'true'">
+    <MakeDir Directories="$(ErosPluginsDir)" />
+    <Copy SourceFiles="$(TargetPath);$(OutputPath)ModManager.FileApplier.exe"
+          DestinationFolder="$(ErosPluginsDir)" />
+  </Target>
+</Project>
+
