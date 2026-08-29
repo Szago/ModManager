@@ -8,7 +8,7 @@ namespace ModManager
 {
     public static class ModManagerApi
     {
-        public const string ManagerGuid = "com.jaqb.eros.modmanager";
+        public const string ManagerGuid = "com.eros.modmanager";
         public const string StateFileName = "ModManager.states.cfg";
 
         private const string StateSection = "Mods";

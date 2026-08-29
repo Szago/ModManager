@@ -9,9 +9,9 @@ namespace ModManager
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
     public sealed class Plugin : BaseUnityPlugin
     {
-        public const string PluginGuid = "com.jaqb.eros.modmanager";
+        public const string PluginGuid = "com.eros.modmanager";
         public const string PluginName = "Mod Manager";
-        public const string PluginVersion = "2.0.5";
+        public const string PluginVersion = "2.0.6";
 
         private const float UiScanInterval = 5f;
 

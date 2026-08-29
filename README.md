@@ -1,6 +1,6 @@
 # Mod Manager
 
-BepInEx plugin ID: `com.jaqb.eros.modmanager`
+BepInEx plugin ID: `com.eros.modmanager`
 
 Adds a **MOD MANAGER** button below the FPS controls in the game's settings
 panel. The button opens a game-styled panel listing mods integrated with the
@@ -16,7 +16,7 @@ Mod Manager API and their restart-state toggles.
   handlers, coroutines, or UI.
 - Disabled DLLs remain untouched and loaded by BepInEx, but their plugin
   initialization exits immediately.
-- Mods declare a BepInEx dependency on `com.jaqb.eros.modmanager`, which lets
+- Mods declare a BepInEx dependency on `com.eros.modmanager`, which lets
   the manager list only plugins that actually support this API.
 - Mod Manager itself is never listed and cannot be disabled.
 
