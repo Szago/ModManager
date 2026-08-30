@@ -45,6 +45,7 @@ namespace ModManager
         private GridLayoutGroup _gridLayout;
         private TMP_Text _footer;
         private Sprite _rowBackgroundSprite;
+        private Sprite _roundedScrollbarSprite;
         private Sprite _settingsIconSprite;
         private GameObject _settingsPopup;
         private bool _loggedMissingSettingsIcon;
@@ -513,8 +514,10 @@ namespace ModManager
             scroll.horizontal = false;
             scroll.vertical = true;
             scroll.inertia = true;
-            scroll.scrollSensitivity = 100f;
-            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.decelerationRate = 0.135f;
+            scroll.elasticity = 0.12f;
+            scroll.scrollSensitivity = 72f;
+            scroll.movementType = ScrollRect.MovementType.Elastic;
 
             GameObject viewport = UiFactory.Object("Viewport", scrollObject.transform);
             _listViewport = UiFactory.Rect(
@@ -522,7 +525,7 @@ namespace ModManager
                 Vector2.zero,
                 Vector2.one,
                 Vector2.zero,
-                Vector2.zero);
+                new Vector2(-48f, 0f));
             UiFactory.Image(viewport, new Color(0f, 0f, 0f, 0.16f));
             viewport.AddComponent<RectMask2D>();
 
@@ -546,6 +549,125 @@ namespace ModManager
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             scroll.viewport = viewport.GetComponent<RectTransform>();
             scroll.content = _content;
+            scroll.verticalScrollbar = CreateVerticalScrollbar(
+                scrollObject.transform);
+            scroll.verticalScrollbarVisibility =
+                ScrollRect.ScrollbarVisibility.Permanent;
+            scroll.verticalScrollbarSpacing = 12f;
+        }
+
+        private Scrollbar CreateVerticalScrollbar(Transform parent)
+        {
+            Sprite roundedSprite = GetRoundedScrollbarSprite();
+            GameObject trackObject = UiFactory.Object(
+                "VerticalScrollbar",
+                parent);
+            UiFactory.Rect(
+                trackObject,
+                new Vector2(1f, 0f),
+                new Vector2(1f, 1f),
+                new Vector2(-34f, 12f),
+                new Vector2(-8f, -12f));
+            Image track = UiFactory.Image(
+                trackObject,
+                new Color(
+                    233f / 255f,
+                    199f / 255f,
+                    175f / 255f,
+                    1f));
+            track.sprite = roundedSprite;
+            track.type = Image.Type.Sliced;
+
+            GameObject slidingArea = UiFactory.Object(
+                "Sliding Area",
+                trackObject.transform);
+            UiFactory.Rect(
+                slidingArea,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(3f, 3f),
+                new Vector2(-3f, -3f));
+
+            GameObject handleObject = UiFactory.Object(
+                "Handle",
+                slidingArea.transform);
+            RectTransform handleRect = UiFactory.Rect(
+                handleObject,
+                Vector2.zero,
+                Vector2.one,
+                Vector2.zero,
+                Vector2.zero);
+            Image handle = UiFactory.Image(
+                handleObject,
+                new Color(
+                    70f / 255f,
+                    39f / 255f,
+                    38f / 255f,
+                    1f));
+            handle.sprite = roundedSprite;
+            handle.type = Image.Type.Sliced;
+
+            Scrollbar scrollbar = trackObject.AddComponent<Scrollbar>();
+            scrollbar.targetGraphic = handle;
+            scrollbar.handleRect = handleRect;
+            scrollbar.direction = Scrollbar.Direction.BottomToTop;
+            scrollbar.numberOfSteps = 0;
+            ColorBlock colors = scrollbar.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(1f, 0.92f, 0.82f, 1f);
+            colors.pressedColor = new Color(0.78f, 0.68f, 0.60f, 1f);
+            colors.selectedColor = colors.highlightedColor;
+            scrollbar.colors = colors;
+            return scrollbar;
+        }
+
+        private Sprite GetRoundedScrollbarSprite()
+        {
+            if (_roundedScrollbarSprite != null)
+                return _roundedScrollbarSprite;
+
+            const int size = 32;
+            const float radius = 12f;
+            var texture = new Texture2D(
+                size,
+                size,
+                TextureFormat.RGBA32,
+                false);
+            texture.name = "ModManager_RoundedScrollbar";
+            texture.wrapMode = TextureWrapMode.Clamp;
+            texture.filterMode = FilterMode.Bilinear;
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float px = Mathf.Abs(x + 0.5f - size * 0.5f) -
+                               (size * 0.5f - radius);
+                    float py = Mathf.Abs(y + 0.5f - size * 0.5f) -
+                               (size * 0.5f - radius);
+                    float outsideX = Mathf.Max(px, 0f);
+                    float outsideY = Mathf.Max(py, 0f);
+                    float distance = Mathf.Sqrt(
+                        outsideX * outsideX + outsideY * outsideY) +
+                        Mathf.Min(Mathf.Max(px, py), 0f) - radius;
+                    byte alpha = (byte)Mathf.RoundToInt(
+                        Mathf.Clamp01(0.5f - distance) * 255f);
+                    pixels[y * size + x] =
+                        new Color32(255, 255, 255, alpha);
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            _roundedScrollbarSprite = Sprite.Create(
+                texture,
+                new Rect(0f, 0f, size, size),
+                new Vector2(0.5f, 0.5f),
+                100f,
+                0,
+                SpriteMeshType.FullRect,
+                new Vector4(radius, radius, radius, radius));
+            _roundedScrollbarSprite.name = "ModManager_RoundedScrollbar";
+            return _roundedScrollbarSprite;
         }
 
         private void UpdateGridLayout()

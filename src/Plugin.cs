@@ -11,7 +11,7 @@ namespace ModManager
     {
         public const string PluginGuid = "com.eros.modmanager";
         public const string PluginName = "Mod Manager";
-        public const string PluginVersion = "2.1.0";
+        public const string PluginVersion = "2.1.1";
 
         private const float UiScanInterval = 5f;
 
