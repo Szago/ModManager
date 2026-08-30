@@ -25,6 +25,11 @@ namespace ModManager
             11f / 255f,
             10f / 255f,
             1f);
+        private static readonly Color InactiveOptionBackground = new Color(
+            70f / 255f,
+            39f / 255f,
+            38f / 255f,
+            1f);
 
         private readonly ManualLogSource _logger;
         private readonly ModRegistry _registry;
@@ -40,6 +45,9 @@ namespace ModManager
         private GridLayoutGroup _gridLayout;
         private TMP_Text _footer;
         private Sprite _rowBackgroundSprite;
+        private Sprite _settingsIconSprite;
+        private GameObject _settingsPopup;
+        private bool _loggedMissingSettingsIcon;
 
         internal ManagerUi(ManualLogSource logger, ModRegistry registry)
         {
@@ -466,6 +474,7 @@ namespace ModManager
 
         private void Hide()
         {
+            DestroySettingsPopup();
             if (_overlayCanvasObject != null)
                 _overlayCanvasObject.SetActive(false);
             if (_sourceSettingsCanvasObject != null)
@@ -476,6 +485,7 @@ namespace ModManager
 
         private void RefreshRows()
         {
+            DestroySettingsPopup();
             foreach (GameObject row in _rows)
             {
                 if (row != null)
@@ -575,6 +585,11 @@ namespace ModManager
 
         private void CreateModRow(ManagedMod mod)
         {
+            IReadOnlyList<RegisteredChoiceSetting> settings =
+                ModManagerApi.GetChoiceSettings(mod.Guid);
+            bool hasSettings = settings.Count > 0;
+            float textRightInset = hasSettings ? -360f : -260f;
+
             GameObject row = UiFactory.Object("Mod_" + mod.Guid, _content);
             _rows.Add(row);
             Image rowImage = UiFactory.Image(row, RowColor);
@@ -593,7 +608,7 @@ namespace ModManager
                 44f, TextAlignmentOptions.MidlineLeft, Color.white);
             name.fontStyle = FontStyles.Bold;
             UiFactory.Rect(name.gameObject, Vector2.zero, Vector2.one,
-                new Vector2(36f, 84f), new Vector2(-260f, -16f));
+                new Vector2(36f, 84f), new Vector2(textRightInset, -16f));
 
             TMP_Text identity = UiFactory.TmpText(
                 "Guid",
@@ -603,7 +618,7 @@ namespace ModManager
                 TextAlignmentOptions.MidlineLeft,
                 MutedText);
             UiFactory.Rect(identity.gameObject, Vector2.zero, Vector2.one,
-                new Vector2(36f, 40f), new Vector2(-260f, -96f));
+                new Vector2(36f, 40f), new Vector2(textRightInset, -96f));
 
             TMP_Text status = UiFactory.TmpText(
                 "Status",
@@ -614,7 +629,15 @@ namespace ModManager
                 StatusColor(mod));
             status.fontStyle = FontStyles.Bold;
             UiFactory.Rect(status.gameObject, Vector2.zero, Vector2.one,
-                new Vector2(36f, 14f), new Vector2(-260f, -136f));
+                new Vector2(36f, 14f), new Vector2(textRightInset, -136f));
+
+            if (hasSettings)
+            {
+                Button gear = CreateSettingsGear(row.transform);
+                RectTransform gearRect = gear.GetComponent<RectTransform>();
+                gear.onClick.AddListener(() =>
+                    ShowSettingsPopup(mod, settings, gearRect));
+            }
 
             bool desiredState = mod.DesiredEnabled;
             Image enabledVisual;
@@ -644,6 +667,454 @@ namespace ModManager
                     _footer.text = "The state could not be saved. Check BepInEx\\LogOutput.log.";
                 }
             });
+        }
+
+        private Button CreateSettingsGear(Transform parent)
+        {
+            GameObject root = UiFactory.Object("SettingsGear", parent);
+            UiFactory.Rect(root, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
+                new Vector2(-336f, -42f), new Vector2(-248f, 42f));
+            Image icon = UiFactory.Image(root, Color.white);
+            icon.preserveAspect = true;
+            icon.sprite = FindSettingsIconSprite();
+            icon.color = new Color(
+                70f / 255f,
+                39f / 255f,
+                38f / 255f,
+                1f);
+
+            Button button = root.AddComponent<Button>();
+            button.targetGraphic = icon;
+            button.transition = Selectable.Transition.ColorTint;
+            ColorBlock colors = button.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(1f, 0.86f, 0.52f, 1f);
+            colors.pressedColor = new Color(0.78f, 0.62f, 0.30f, 1f);
+            colors.selectedColor = colors.highlightedColor;
+            button.colors = colors;
+
+            if (icon.sprite == null)
+            {
+                icon.color = new Color(0f, 0f, 0f, 0.01f);
+                Text fallback = UiFactory.Text(
+                    "GearFallback",
+                    root.transform,
+                    "⚙",
+                    48,
+                    TextAnchor.MiddleCenter,
+                    new Color(
+                        70f / 255f,
+                        39f / 255f,
+                        38f / 255f,
+                        1f));
+                UiFactory.Rect(
+                    fallback.gameObject,
+                    Vector2.zero,
+                    Vector2.one,
+                    Vector2.zero,
+                    Vector2.zero);
+            }
+            return button;
+        }
+
+        private Sprite FindSettingsIconSprite()
+        {
+            if (_settingsIconSprite != null)
+                return _settingsIconSprite;
+
+            foreach (Sprite sprite in Resources.FindObjectsOfTypeAll<Sprite>())
+            {
+                if (sprite != null &&
+                    string.Equals(
+                        sprite.name,
+                        "UI_Icon_Settings",
+                        System.StringComparison.OrdinalIgnoreCase))
+                {
+                    _settingsIconSprite = sprite;
+                    _loggedMissingSettingsIcon = false;
+                    _logger.LogInfo(
+                        "[ModManager] Using loaded game sprite UI_Icon_Settings.");
+                    return _settingsIconSprite;
+                }
+            }
+
+            if (!_loggedMissingSettingsIcon)
+            {
+                _loggedMissingSettingsIcon = true;
+                _logger.LogWarning(
+                    "[ModManager] UI_Icon_Settings is not loaded; using the text gear fallback.");
+            }
+            return null;
+        }
+
+        private void ShowSettingsPopup(
+            ManagedMod mod,
+            IReadOnlyList<RegisteredChoiceSetting> settings,
+            RectTransform gearRect)
+        {
+            DestroySettingsPopup();
+            if (_overlayCanvasObject == null || gearRect == null)
+                return;
+
+            _settingsPopup = UiFactory.Object(
+                "ModSettings_" + mod.Guid,
+                _overlayCanvasObject.transform);
+            RectTransform popupRect = UiFactory.Rect(
+                _settingsPopup,
+                new Vector2(0.5f, 0.5f),
+                new Vector2(0.5f, 0.5f),
+                Vector2.zero,
+                Vector2.zero);
+            popupRect.sizeDelta = new Vector2(840f, 520f);
+            PositionPopupAtGear(popupRect, gearRect);
+
+            Image popupBackground = UiFactory.Image(_settingsPopup, RowColor);
+            if (_rowBackgroundSprite != null)
+            {
+                popupBackground.sprite = _rowBackgroundSprite;
+                popupBackground.type = Image.Type.Sliced;
+                popupBackground.color = Color.white;
+            }
+            Outline popupOutline = _settingsPopup.AddComponent<Outline>();
+            popupOutline.effectColor = Accent;
+            popupOutline.effectDistance = new Vector2(4f, -4f);
+            CanvasGroup group = _settingsPopup.AddComponent<CanvasGroup>();
+            group.alpha = 1f;
+            group.interactable = true;
+            group.blocksRaycasts = true;
+            group.ignoreParentGroups = true;
+
+            TMP_Text title = UiFactory.TmpText(
+                "Title",
+                _settingsPopup.transform,
+                mod.Name.ToUpperInvariant(),
+                38f,
+                TextAlignmentOptions.MidlineLeft,
+                Color.white);
+            title.fontStyle = FontStyles.Bold;
+            UiFactory.Rect(title.gameObject, Vector2.zero, Vector2.one,
+                new Vector2(34f, 418f), new Vector2(-98f, -24f));
+
+            GameObject divider = UiFactory.Object(
+                "HeaderDivider",
+                _settingsPopup.transform);
+            UiFactory.Rect(divider, Vector2.zero, Vector2.one,
+                new Vector2(28f, 400f), new Vector2(-28f, -112f));
+            UiFactory.Image(divider, DividerColor, false);
+
+            Button close = CreatePopupCloseButton(_settingsPopup.transform);
+            close.onClick.AddListener(DestroySettingsPopup);
+            CreateSettingsPopupBody(settings);
+
+            TMP_Text note = UiFactory.TmpText(
+                "ApplyNote",
+                _settingsPopup.transform,
+                "Settings apply immediately.",
+                24f,
+                TextAlignmentOptions.MidlineLeft,
+                MutedText);
+            UiFactory.Rect(note.gameObject, Vector2.zero, Vector2.one,
+                new Vector2(34f, 18f), new Vector2(-34f, -454f));
+
+            _settingsPopup.transform.SetAsLastSibling();
+            _logger.LogInfo(
+                "[ModManager] Opened settings popup for " + mod.Guid + ".");
+        }
+
+        private static void PositionPopupAtGear(
+            RectTransform popupRect,
+            RectTransform gearRect)
+        {
+            RectTransform overlayRect = popupRect.parent as RectTransform;
+            if (overlayRect == null)
+                return;
+
+            var gearCorners = new Vector3[4];
+            gearRect.GetWorldCorners(gearCorners);
+            Vector3 bottomLeft3 = overlayRect.InverseTransformPoint(gearCorners[0]);
+            Vector3 topLeft3 = overlayRect.InverseTransformPoint(gearCorners[1]);
+            Vector3 topRight3 = overlayRect.InverseTransformPoint(gearCorners[2]);
+            Vector3 bottomRight3 = overlayRect.InverseTransformPoint(gearCorners[3]);
+            Vector2 bottomLeft = new Vector2(bottomLeft3.x, bottomLeft3.y);
+            Vector2 topLeft = new Vector2(topLeft3.x, topLeft3.y);
+            Vector2 topRight = new Vector2(topRight3.x, topRight3.y);
+            Vector2 bottomRight = new Vector2(bottomRight3.x, bottomRight3.y);
+
+            Rect bounds = overlayRect.rect;
+            bool extendLeft = bottomLeft.x - bounds.xMin >=
+                              bounds.xMax - bottomRight.x;
+            bool extendDown = bottomLeft.y - bounds.yMin >=
+                              bounds.yMax - topLeft.y;
+            popupRect.pivot = new Vector2(
+                extendLeft ? 1f : 0f,
+                extendDown ? 1f : 0f);
+            popupRect.anchoredPosition = new Vector2(
+                extendLeft ? bottomLeft.x : bottomRight.x,
+                extendDown ? bottomLeft.y : topRight.y);
+        }
+
+        private Button CreatePopupCloseButton(Transform parent)
+        {
+            if (_nativeCloseObject != null)
+            {
+                GameObject nativeClone = Object.Instantiate(
+                    _nativeCloseObject,
+                    parent,
+                    false);
+                nativeClone.name = "ModSettings_Btn_Close";
+                nativeClone.SetActive(true);
+                RectTransform nativeRect =
+                    nativeClone.GetComponent<RectTransform>();
+                if (nativeRect != null)
+                {
+                    nativeRect.anchorMin = Vector2.one;
+                    nativeRect.anchorMax = Vector2.one;
+                    nativeRect.pivot = new Vector2(0.5f, 0.5f);
+                    nativeRect.anchoredPosition = new Vector2(-54f, -54f);
+                    nativeRect.sizeDelta = new Vector2(76f, 76f);
+                    nativeRect.localScale = Vector3.one;
+                }
+
+                Button nativeButton =
+                    nativeClone.GetComponent<Button>() ??
+                    nativeClone.GetComponentInChildren<Button>(true);
+                if (nativeButton != null)
+                {
+                    nativeButton.onClick = new Button.ButtonClickedEvent();
+                    nativeButton.interactable = true;
+                    return nativeButton;
+                }
+
+                Object.Destroy(nativeClone);
+            }
+
+            GameObject root = UiFactory.Object("Close", parent);
+            UiFactory.Rect(root, new Vector2(1f, 1f), new Vector2(1f, 1f),
+                new Vector2(-82f, -82f), new Vector2(-22f, -22f));
+            Image background = UiFactory.Image(root, HeaderText);
+            Outline outline = root.AddComponent<Outline>();
+            outline.effectColor = Accent;
+            outline.effectDistance = new Vector2(2f, -2f);
+            Button button = root.AddComponent<Button>();
+            button.targetGraphic = background;
+            button.transition = Selectable.Transition.ColorTint;
+            TMP_Text label = UiFactory.TmpText(
+                "Label",
+                root.transform,
+                "X",
+                34f,
+                TextAlignmentOptions.Center,
+                Color.white);
+            label.fontStyle = FontStyles.Bold;
+            ForceTmpColor(label, Color.white);
+            UiFactory.Rect(label.gameObject, Vector2.zero, Vector2.one,
+                Vector2.zero, Vector2.zero);
+            return button;
+        }
+
+        private void CreateSettingsPopupBody(
+            IReadOnlyList<RegisteredChoiceSetting> settings)
+        {
+            GameObject scrollObject = UiFactory.Object(
+                "SettingsScroll",
+                _settingsPopup.transform);
+            UiFactory.Rect(scrollObject, Vector2.zero, Vector2.one,
+                new Vector2(26f, 68f), new Vector2(-26f, -126f));
+            ScrollRect scroll = scrollObject.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.inertia = true;
+            scroll.scrollSensitivity = 80f;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+
+            GameObject viewport = UiFactory.Object("Viewport", scrollObject.transform);
+            RectTransform viewportRect = UiFactory.Rect(
+                viewport,
+                Vector2.zero,
+                Vector2.one,
+                Vector2.zero,
+                Vector2.zero);
+            UiFactory.Image(viewport, new Color(0f, 0f, 0f, 0.18f));
+            viewport.AddComponent<RectMask2D>();
+
+            GameObject contentObject = UiFactory.Object("Content", viewport.transform);
+            RectTransform content = UiFactory.Rect(
+                contentObject,
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                Vector2.zero,
+                Vector2.zero);
+            content.pivot = new Vector2(0.5f, 1f);
+            VerticalLayoutGroup layout = contentObject.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(14, 14, 14, 14);
+            layout.spacing = 18f;
+            layout.childControlHeight = true;
+            layout.childControlWidth = true;
+            layout.childForceExpandHeight = false;
+            layout.childForceExpandWidth = true;
+            ContentSizeFitter fitter = contentObject.AddComponent<ContentSizeFitter>();
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            foreach (RegisteredChoiceSetting setting in settings)
+                CreateChoiceSetting(setting, content);
+
+            scroll.viewport = viewportRect;
+            scroll.content = content;
+        }
+
+        private void CreateChoiceSetting(
+            RegisteredChoiceSetting setting,
+            Transform parent)
+        {
+            GameObject group = UiFactory.Object("Setting_" + setting.Key, parent);
+            LayoutElement layout = group.AddComponent<LayoutElement>();
+            layout.preferredHeight = 148f;
+            layout.minHeight = 148f;
+
+            TMP_Text label = UiFactory.TmpText(
+                "Label",
+                group.transform,
+                setting.DisplayName,
+                28f,
+                TextAlignmentOptions.MidlineLeft,
+                MutedText);
+            label.fontStyle = FontStyles.Bold;
+            UiFactory.Rect(label.gameObject, Vector2.zero, Vector2.one,
+                new Vector2(8f, 98f), new Vector2(-8f, -4f));
+
+            var visuals = new List<ChoiceVisual>();
+            int count = setting.Options.Count;
+            for (int index = 0; index < count; index++)
+            {
+                ModChoiceOption option = setting.Options[index];
+                float min = index / (float)count;
+                float max = (index + 1) / (float)count;
+                GameObject optionObject = UiFactory.Object(
+                    "Option_" + option.Value,
+                    group.transform);
+                UiFactory.Rect(
+                    optionObject,
+                    new Vector2(min, 0f),
+                    new Vector2(max, 0f),
+                    new Vector2(8f, 8f),
+                    new Vector2(-8f, 88f));
+                Image background = UiFactory.Image(optionObject, HeaderText);
+                Outline outline = optionObject.AddComponent<Outline>();
+                outline.effectDistance = new Vector2(2f, -2f);
+                Button button = optionObject.AddComponent<Button>();
+                button.targetGraphic = background;
+                button.transition = Selectable.Transition.ColorTint;
+                TMP_Text optionLabel = UiFactory.TmpText(
+                    "Label",
+                    optionObject.transform,
+                    option.Label,
+                    28f,
+                    TextAlignmentOptions.Center,
+                    Color.white);
+                optionLabel.fontStyle = FontStyles.Bold;
+                ForceTmpColor(optionLabel, Color.white);
+                UiFactory.Rect(optionLabel.gameObject, Vector2.zero, Vector2.one,
+                    new Vector2(8f, 4f), new Vector2(-8f, -4f));
+
+                var visual = new ChoiceVisual(
+                    option.Value,
+                    background,
+                    outline,
+                    optionLabel);
+                visuals.Add(visual);
+                ModChoiceOption selectedOption = option;
+                button.onClick.AddListener(() =>
+                {
+                    try
+                    {
+                        setting.Select(selectedOption.Value);
+                        RefreshChoiceVisuals(visuals, setting.CurrentValue);
+                        _logger.LogInfo(
+                            "[ModManager] Setting event: " + setting.Key +
+                            " => " + selectedOption.Value + ".");
+                    }
+                    catch (System.Exception exception)
+                    {
+                        _logger.LogError(
+                            "[ModManager] Could not save setting " +
+                            setting.Key + ": " + exception);
+                        _footer.text =
+                            "The setting could not be saved. Check BepInEx\\LogOutput.log.";
+                    }
+                });
+            }
+
+            RefreshChoiceVisuals(visuals, setting.CurrentValue);
+        }
+
+        private static void RefreshChoiceVisuals(
+            IEnumerable<ChoiceVisual> visuals,
+            string currentValue)
+        {
+            foreach (ChoiceVisual visual in visuals)
+            {
+                bool selected = string.Equals(
+                    visual.Value,
+                    currentValue,
+                    System.StringComparison.Ordinal);
+                visual.Background.color = selected
+                    ? Accent
+                    : InactiveOptionBackground;
+                visual.Outline.effectColor = selected ? HeaderText : Accent;
+                ForceTmpColor(
+                    visual.Label,
+                    selected ? HeaderText : Color.white);
+            }
+        }
+
+        private static void ForceTmpColor(TMP_Text text, Color color)
+        {
+            if (text == null)
+                return;
+
+            color.a = 1f;
+            text.alpha = 1f;
+            text.enableVertexGradient = false;
+            text.color = color;
+            text.faceColor = color;
+            text.colorGradient = new VertexGradient(color);
+            if (text.fontMaterial != null)
+                text.fontMaterial.SetColor(
+                    ShaderUtilities.ID_FaceColor,
+                    Color.white);
+            text.ForceMeshUpdate(true, true);
+            text.UpdateVertexData(TMP_VertexDataUpdateFlags.Colors32);
+            text.SetVerticesDirty();
+        }
+
+        private void DestroySettingsPopup()
+        {
+            if (_settingsPopup == null)
+                return;
+
+            _settingsPopup.SetActive(false);
+            Object.Destroy(_settingsPopup);
+            _settingsPopup = null;
+        }
+
+        private sealed class ChoiceVisual
+        {
+            internal ChoiceVisual(
+                string value,
+                Image background,
+                Outline outline,
+                TMP_Text label)
+            {
+                Value = value;
+                Background = background;
+                Outline = outline;
+                Label = label;
+            }
+
+            internal string Value { get; }
+            internal Image Background { get; }
+            internal Outline Outline { get; }
+            internal TMP_Text Label { get; }
         }
 
         private static Button CreateToggle(

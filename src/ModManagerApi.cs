@@ -6,7 +6,7 @@ using BepInEx.Configuration;
 
 namespace ModManager
 {
-    public static class ModManagerApi
+    public static partial class ModManagerApi
     {
         public const string ManagerGuid = "com.eros.modmanager";
         public const string StateFileName = "ModManager.states.cfg";
