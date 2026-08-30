@@ -75,8 +75,6 @@ namespace ModManager
             Canvas.ForceUpdateCanvases();
             UpdateGridLayout();
             _sourceSettingsCanvasObject.SetActive(false);
-            _logger.LogInfo(
-                "[ModManager] Set Canvas_Settings inactive and opened the independent manager canvas.");
         }
 
         internal void Destroy()
@@ -175,15 +173,11 @@ namespace ModManager
             interactionGroup.ignoreParentGroups = true;
 
             string gameFont = UiFactory.CaptureGameFont(settingsCanvasRoot);
-            _logger.LogInfo(
-                gameFont == null
-                    ? "[ModManager] No compatible game TMP font found; using TMP default."
-                    : "[ModManager] Using game TMP font: " + gameFont);
+            if (gameFont == null)
+                _logger.LogWarning(
+                    "[ModManager] No compatible game TMP font found; using TMP default.");
             _rowBackgroundSprite =
                 _assets.LoadEmbeddedSprite("UI_BG_Paper.png", 24f);
-            if (_rowBackgroundSprite != null)
-                _logger.LogInfo(
-                    "[ModManager] Loaded TeamPresets UI_BG_Paper row texture.");
             CreateHeader();
             CreateInfo();
             CreateList();
@@ -191,8 +185,6 @@ namespace ModManager
             _panel.transform.SetParent(overlayParent, true);
             _panel.transform.SetAsLastSibling();
             _overlayCanvasObject.SetActive(false);
-            _logger.LogInfo(
-                "[ModManager] Created an independent manager canvas; interactive content is a direct canvas child.");
         }
 
         private void CloneSettingsBackdrop(
@@ -217,8 +209,6 @@ namespace ModManager
                      backdrop.GetComponentsInChildren<Graphic>(true))
                 graphic.raycastTarget = true;
             backdrop.transform.SetAsFirstSibling();
-            _logger.LogInfo(
-                "[ModManager] Cloned Canvas_Settings/Background into the manager canvas.");
         }
 
         private void CreateOverlayCanvas(Canvas sourceCanvas, Transform parent)
@@ -308,7 +298,6 @@ namespace ModManager
                 return;
             }
 
-            int imageCount = 0;
             foreach (Image sourceImage in
                      sourceBackground.GetComponentsInChildren<Image>(true))
             {
@@ -322,10 +311,8 @@ namespace ModManager
                 Image targetImage = target.GetComponent<Image>() ??
                                     target.gameObject.AddComponent<Image>();
                 CopyImage(sourceImage, targetImage);
-                imageCount++;
             }
 
-            int rawImageCount = 0;
             foreach (RawImage sourceImage in
                      sourceBackground.GetComponentsInChildren<RawImage>(true))
             {
@@ -344,13 +331,9 @@ namespace ModManager
                 targetImage.color = sourceImage.color;
                 targetImage.enabled = sourceImage.enabled;
                 targetImage.raycastTarget = false;
-                rawImageCount++;
             }
 
             clonedBackground.gameObject.SetActive(true);
-            _logger.LogInfo(
-                "[ModManager] Restored Settings_BG visuals: " +
-                imageCount + " Image, " + rawImageCount + " RawImage component(s).");
         }
 
         private void CreateNativeCloseButton(Transform sourceShell)
@@ -394,7 +377,6 @@ namespace ModManager
             closeButton.onClick.AddListener(Hide);
             closeButton.interactable = true;
             _nativeCloseObject.SetActive(false);
-            _logger.LogInfo("[ModManager] Cloned native settings Btn_Close.");
         }
 
         private static Transform FindMatchingTransform(
@@ -480,8 +462,6 @@ namespace ModManager
                 _overlayCanvasObject.SetActive(false);
             if (_sourceSettingsCanvasObject != null)
                 _sourceSettingsCanvasObject.SetActive(true);
-            _logger.LogInfo(
-                "[ModManager] Closed manager canvas and restored Canvas_Settings.");
         }
 
         private void RefreshRows()
@@ -686,10 +666,6 @@ namespace ModManager
             float cellWidth = availableWidth * 0.5f;
             _gridLayout.cellSize = new Vector2(cellWidth, 188f);
             LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
-            _logger.LogInfo(
-                "[ModManager] Two-column grid width=" +
-                _listViewport.rect.width.ToString("0.0") +
-                ", cell width=" + cellWidth.ToString("0.0") + ".");
         }
 
         private void CreateFooter()
@@ -772,9 +748,6 @@ namespace ModManager
                 bool enabled = !desiredState;
                 try
                 {
-                    _logger.LogInfo(
-                        "[ModManager] Toggle event: " + mod.Guid +
-                        " => " + enabled + ".");
                     _footer.text = _registry.SetDesiredState(mod, enabled);
                     desiredState = enabled;
                     SetToggleVisual(enabledVisual, desiredState);
@@ -854,8 +827,6 @@ namespace ModManager
                 {
                     _settingsIconSprite = sprite;
                     _loggedMissingSettingsIcon = false;
-                    _logger.LogInfo(
-                        "[ModManager] Using loaded game sprite UI_Icon_Settings.");
                     return _settingsIconSprite;
                 }
             }
@@ -939,8 +910,6 @@ namespace ModManager
                 new Vector2(34f, 18f), new Vector2(-34f, -454f));
 
             _settingsPopup.transform.SetAsLastSibling();
-            _logger.LogInfo(
-                "[ModManager] Opened settings popup for " + mod.Guid + ".");
         }
 
         private static void PositionPopupAtGear(
@@ -1151,9 +1120,6 @@ namespace ModManager
                     {
                         setting.Select(selectedOption.Value);
                         RefreshChoiceVisuals(visuals, setting.CurrentValue);
-                        _logger.LogInfo(
-                            "[ModManager] Setting event: " + setting.Key +
-                            " => " + selectedOption.Value + ".");
                     }
                     catch (System.Exception exception)
                     {

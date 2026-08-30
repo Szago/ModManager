@@ -26,19 +26,17 @@ namespace ModManager
         private float _nextUiScan;
         private ModRegistry _registry;
         private ManagerUi _managerUi;
-        private bool _loggedMissingClaimButton;
 
         internal static Plugin Instance { get; private set; }
 
         private void Awake()
         {
             Instance = this;
-            _registry = new ModRegistry(Logger);
+            _registry = new ModRegistry();
             _registry.Discover();
             _managerUi = new ManagerUi(Logger, _registry);
             new Harmony(PluginGuid).PatchAll();
 
-            Logger.LogInfo("[ModManager] Loaded exact RefreshRateLimit lifecycle test.");
             Application.onBeforeRender -= TickPersistentRuntime;
             Application.onBeforeRender += TickPersistentRuntime;
         }
@@ -136,16 +134,8 @@ namespace ModManager
 
             Button claimButton = SettingsButton.FindClaimButton();
             if (claimButton == null)
-            {
-                if (!_loggedMissingClaimButton)
-                {
-                    Logger.LogInfo("[ModManager] Waiting for the Promo Code claim-button template.");
-                    _loggedMissingClaimButton = true;
-                }
                 return;
-            }
 
-            _loggedMissingClaimButton = false;
             _button30 = button30;
             _button60 = button60;
             _testButton = SettingsButton.Install(
@@ -153,9 +143,6 @@ namespace ModManager
                 button60,
                 claimButton,
                 OpenManager);
-
-            if (_testButton != null)
-                Logger.LogInfo("[ModManager] Promo Code claim-button clone attached to the FPS controls.");
         }
 
         private void OpenManager()

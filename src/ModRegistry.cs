@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using BepInEx;
 using BepInEx.Bootstrap;
-using BepInEx.Logging;
 
 namespace ModManager
 {
@@ -19,14 +18,10 @@ namespace ModManager
 
     internal sealed class ModRegistry
     {
-        private readonly ManualLogSource _logger;
         private readonly Dictionary<string, ManagedMod> _mods =
             new Dictionary<string, ManagedMod>(StringComparer.OrdinalIgnoreCase);
 
-        internal ModRegistry(ManualLogSource logger)
-        {
-            _logger = logger;
-        }
+        internal ModRegistry() { }
 
         internal IReadOnlyList<ManagedMod> Mods =>
             _mods.Values
@@ -58,10 +53,6 @@ namespace ModManager
                 };
             }
 
-            _logger.LogInfo(
-                "[ModManager] Discovered " + _mods.Count +
-                " API-integrated mod(s). State file: " +
-                ModManagerApi.StateFilePath);
         }
 
         internal string SetDesiredState(ManagedMod mod, bool enabled)
@@ -71,10 +62,6 @@ namespace ModManager
 
             ModManagerApi.SetConfiguredState(mod.Guid, enabled);
             mod.DesiredEnabled = enabled;
-            _logger.LogInfo(
-                "[ModManager] " + mod.Name + " will be " +
-                (enabled ? "enabled" : "disabled") +
-                " after restart.");
             return "Saved. The new state will apply after the game restarts.";
         }
 
