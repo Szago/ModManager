@@ -11,6 +11,7 @@ namespace ModManager
         internal string Guid;
         internal string Name;
         internal string Version;
+        internal string Description;
         internal bool ActiveThisSession;
         internal bool DesiredEnabled;
         internal bool Pending => ActiveThisSession != DesiredEnabled;
@@ -48,6 +49,7 @@ namespace ModManager
                     Guid = guid,
                     Name = info.Metadata.Name,
                     Version = info.Metadata.Version?.ToString() ?? "",
+                    Description = ModManagerApi.GetDescription(guid),
                     ActiveThisSession = ModManagerApi.IsEnabled(guid),
                     DesiredEnabled = ModManagerApi.GetConfiguredState(guid)
                 };

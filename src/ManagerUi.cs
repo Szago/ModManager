@@ -48,7 +48,10 @@ namespace ModManager
         private Sprite _roundedScrollbarSprite;
         private Sprite _settingsIconSprite;
         private GameObject _settingsPopup;
+        private GameObject _infoPopup;
+        private GameObject _infoButtonTemplate;
         private bool _loggedMissingSettingsIcon;
+        private bool _loggedMissingInfoButton;
 
         internal ManagerUi(ManualLogSource logger, ModRegistry registry)
         {
@@ -457,7 +460,7 @@ namespace ModManager
 
         private void Hide()
         {
-            DestroySettingsPopup();
+            DestroyPopups();
             if (_overlayCanvasObject != null)
                 _overlayCanvasObject.SetActive(false);
             if (_sourceSettingsCanvasObject != null)
@@ -466,7 +469,7 @@ namespace ModManager
 
         private void RefreshRows()
         {
-            DestroySettingsPopup();
+            DestroyPopups();
             foreach (GameObject row in _rows)
             {
                 if (row != null)
@@ -686,7 +689,7 @@ namespace ModManager
             IReadOnlyList<RegisteredChoiceSetting> settings =
                 ModManagerApi.GetChoiceSettings(mod.Guid);
             bool hasSettings = settings.Count > 0;
-            float textRightInset = hasSettings ? -360f : -260f;
+            float textRightInset = hasSettings ? -456f : -360f;
 
             GameObject row = UiFactory.Object("Mod_" + mod.Guid, _content);
             _rows.Add(row);
@@ -737,6 +740,11 @@ namespace ModManager
                     ShowSettingsPopup(mod, settings, gearRect));
             }
 
+            Button info = CreateInfoButton(
+                row.transform,
+                out RectTransform infoRect);
+            info.onClick.AddListener(() => ShowInfoPopup(mod, infoRect));
+
             bool desiredState = mod.DesiredEnabled;
             Image enabledVisual;
             Button toggle = CreateToggle(
@@ -768,7 +776,7 @@ namespace ModManager
         {
             GameObject root = UiFactory.Object("SettingsGear", parent);
             UiFactory.Rect(root, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
-                new Vector2(-336f, -42f), new Vector2(-248f, 42f));
+                new Vector2(-432f, -42f), new Vector2(-344f, 42f));
             Image icon = UiFactory.Image(root, Color.white);
             icon.preserveAspect = true;
             icon.sprite = FindSettingsIconSprite();
@@ -840,12 +848,170 @@ namespace ModManager
             return null;
         }
 
+        private Button CreateInfoButton(
+            Transform parent,
+            out RectTransform buttonRect)
+        {
+            float left = -336f;
+            float right = -248f;
+            GameObject template = FindInfoButtonTemplate();
+            if (template != null)
+            {
+                GameObject clone = Object.Instantiate(
+                    template,
+                    parent,
+                    false);
+                clone.SetActive(false);
+                clone.name = "InfoButton";
+
+                Button button = clone.GetComponent<Button>() ??
+                                clone.GetComponentInChildren<Button>(true);
+                if (button != null)
+                {
+                    foreach (MonoBehaviour component in
+                             clone.GetComponentsInChildren<MonoBehaviour>(true))
+                    {
+                        string componentNamespace =
+                            component.GetType().Namespace ?? string.Empty;
+                        bool isUnityVisual =
+                            component is Graphic ||
+                            component is Selectable ||
+                            component is BaseMeshEffect ||
+                            component is LayoutElement ||
+                            component is LayoutGroup ||
+                            component is ContentSizeFitter ||
+                            component is AspectRatioFitter ||
+                            component is Mask ||
+                            component is RectMask2D;
+                        if (component is UnityEngine.EventSystems.EventTrigger ||
+                            (!isUnityVisual &&
+                             !componentNamespace.StartsWith(
+                                 "TMPro",
+                                 System.StringComparison.Ordinal)))
+                            Object.DestroyImmediate(component);
+                    }
+
+                    button = clone.GetComponent<Button>() ??
+                             clone.GetComponentInChildren<Button>(true);
+                    if (button != null)
+                    {
+                        button.onClick = new Button.ButtonClickedEvent();
+                        button.interactable = true;
+                        button.navigation = new Navigation
+                        {
+                            mode = Navigation.Mode.None
+                        };
+                        LayoutElement layout =
+                            clone.GetComponent<LayoutElement>() ??
+                            clone.AddComponent<LayoutElement>();
+                        layout.ignoreLayout = true;
+                        buttonRect = UiFactory.Rect(
+                            clone,
+                            new Vector2(1f, 0.5f),
+                            new Vector2(1f, 0.5f),
+                            new Vector2(left, -42f),
+                            new Vector2(right, 42f));
+                        buttonRect.localScale = Vector3.one;
+                        buttonRect.localRotation = Quaternion.identity;
+                        clone.SetActive(true);
+                        return button;
+                    }
+                }
+
+                Object.Destroy(clone);
+            }
+
+            GameObject root = UiFactory.Object("InfoButton", parent);
+            buttonRect = UiFactory.Rect(
+                root,
+                new Vector2(1f, 0.5f),
+                new Vector2(1f, 0.5f),
+                new Vector2(left, -42f), new Vector2(right, 42f));
+            Image background = UiFactory.Image(root, HeaderText);
+            Outline outline = root.AddComponent<Outline>();
+            outline.effectColor = Accent;
+            outline.effectDistance = new Vector2(2f, -2f);
+            Button fallback = root.AddComponent<Button>();
+            fallback.targetGraphic = background;
+            TMP_Text label = UiFactory.TmpText(
+                "Label",
+                root.transform,
+                "i",
+                48f,
+                TextAlignmentOptions.Center,
+                Color.white);
+            label.fontStyle = FontStyles.Bold;
+            ForceTmpColor(label, Color.white);
+            UiFactory.Rect(label.gameObject, Vector2.zero, Vector2.one,
+                Vector2.zero, Vector2.zero);
+            return fallback;
+        }
+
+        private GameObject FindInfoButtonTemplate()
+        {
+            if (_infoButtonTemplate != null)
+                return _infoButtonTemplate;
+
+            const string infoPath =
+                "Canvas_Events/Panel_Events/Panel Info/Panel Button/Button Info";
+            GameObject exactObject = GameObject.Find(infoPath);
+            if (exactObject != null &&
+                (exactObject.GetComponent<Button>() != null ||
+                 exactObject.GetComponentInChildren<Button>(true) != null))
+                _infoButtonTemplate = exactObject;
+
+            if (_infoButtonTemplate == null)
+            {
+                foreach (Button candidate in Resources.FindObjectsOfTypeAll<Button>())
+                {
+                    if (candidate == null ||
+                        !candidate.gameObject.scene.IsValid() ||
+                        candidate.name != "Button Info" ||
+                        !HasAncestor(candidate.transform, "Panel Button") ||
+                        !HasAncestor(candidate.transform, "Panel Info") ||
+                        !HasAncestor(candidate.transform, "Panel_Events") ||
+                        !HasAncestor(candidate.transform, "Canvas_Events"))
+                        continue;
+
+                    _infoButtonTemplate = candidate.gameObject;
+                    break;
+                }
+            }
+
+            if (_infoButtonTemplate != null)
+            {
+                _loggedMissingInfoButton = false;
+                return _infoButtonTemplate;
+            }
+
+            if (!_loggedMissingInfoButton)
+            {
+                _loggedMissingInfoButton = true;
+                _logger.LogWarning(
+                    "[ModManager] Canvas_Events info button is not loaded; " +
+                    "using the text info fallback.");
+            }
+            return null;
+        }
+
+        private static bool HasAncestor(Transform transform, string name)
+        {
+            Transform current = transform.parent;
+            while (current != null)
+            {
+                if (current.name == name)
+                    return true;
+                current = current.parent;
+            }
+            return false;
+        }
+
         private void ShowSettingsPopup(
             ManagedMod mod,
             IReadOnlyList<RegisteredChoiceSetting> settings,
             RectTransform gearRect)
         {
-            DestroySettingsPopup();
+            DestroyPopups();
             if (_overlayCanvasObject == null || gearRect == null)
                 return;
 
@@ -910,6 +1076,80 @@ namespace ModManager
                 new Vector2(34f, 18f), new Vector2(-34f, -454f));
 
             _settingsPopup.transform.SetAsLastSibling();
+        }
+
+        private void ShowInfoPopup(ManagedMod mod, RectTransform infoButtonRect)
+        {
+            DestroyPopups();
+            if (_overlayCanvasObject == null || infoButtonRect == null)
+                return;
+
+            _infoPopup = UiFactory.Object(
+                "ModInfo_" + mod.Guid,
+                _overlayCanvasObject.transform);
+            RectTransform popupRect = UiFactory.Rect(
+                _infoPopup,
+                new Vector2(0.5f, 0.5f),
+                new Vector2(0.5f, 0.5f),
+                Vector2.zero,
+                Vector2.zero);
+            popupRect.sizeDelta = new Vector2(840f, 520f);
+            PositionPopupAtGear(popupRect, infoButtonRect);
+
+            Image popupBackground = UiFactory.Image(_infoPopup, RowColor);
+            if (_rowBackgroundSprite != null)
+            {
+                popupBackground.sprite = _rowBackgroundSprite;
+                popupBackground.type = Image.Type.Sliced;
+                popupBackground.color = Color.white;
+            }
+            Outline popupOutline = _infoPopup.AddComponent<Outline>();
+            popupOutline.effectColor = Accent;
+            popupOutline.effectDistance = new Vector2(4f, -4f);
+            CanvasGroup group = _infoPopup.AddComponent<CanvasGroup>();
+            group.alpha = 1f;
+            group.interactable = true;
+            group.blocksRaycasts = true;
+            group.ignoreParentGroups = true;
+
+            TMP_Text title = UiFactory.TmpText(
+                "Title",
+                _infoPopup.transform,
+                mod.Name.ToUpperInvariant(),
+                38f,
+                TextAlignmentOptions.MidlineLeft,
+                Color.white);
+            title.fontStyle = FontStyles.Bold;
+            UiFactory.Rect(title.gameObject, Vector2.zero, Vector2.one,
+                new Vector2(34f, 418f), new Vector2(-98f, -24f));
+
+            GameObject divider = UiFactory.Object(
+                "HeaderDivider",
+                _infoPopup.transform);
+            UiFactory.Rect(divider, Vector2.zero, Vector2.one,
+                new Vector2(28f, 400f), new Vector2(-28f, -112f));
+            UiFactory.Image(divider, DividerColor, false);
+
+            Button close = CreatePopupCloseButton(_infoPopup.transform);
+            close.onClick.AddListener(DestroyInfoPopup);
+
+            TMP_Text description = UiFactory.TmpText(
+                "Description",
+                _infoPopup.transform,
+                string.IsNullOrWhiteSpace(mod.Description)
+                    ? "No description was provided by this mod."
+                    : mod.Description,
+                32f,
+                TextAlignmentOptions.TopLeft,
+                HeaderText);
+            description.enableWordWrapping = true;
+            description.overflowMode = TextOverflowModes.Overflow;
+            description.lineSpacing = 8f;
+            ForceTmpColor(description, HeaderText);
+            UiFactory.Rect(description.gameObject, Vector2.zero, Vector2.one,
+                new Vector2(38f, 42f), new Vector2(-38f, -132f));
+
+            _infoPopup.transform.SetAsLastSibling();
         }
 
         private static void PositionPopupAtGear(
@@ -1183,6 +1423,22 @@ namespace ModManager
             _settingsPopup.SetActive(false);
             Object.Destroy(_settingsPopup);
             _settingsPopup = null;
+        }
+
+        private void DestroyInfoPopup()
+        {
+            if (_infoPopup == null)
+                return;
+
+            _infoPopup.SetActive(false);
+            Object.Destroy(_infoPopup);
+            _infoPopup = null;
+        }
+
+        private void DestroyPopups()
+        {
+            DestroySettingsPopup();
+            DestroyInfoPopup();
         }
 
         private sealed class ChoiceVisual

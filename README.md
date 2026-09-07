@@ -6,7 +6,9 @@ Adds a **MOD MANAGER** button below the FPS controls in the game's settings
 panel. The button opens a game-styled panel listing mods integrated with the
 Mod Manager API and their restart-state toggles. Mods can also register owned
 choice settings; those entries receive a gear button that opens a smaller
-game-styled settings popup.
+game-styled settings popup. Every entry also receives an info button cloned
+from the game's Events panel; it opens the same style of popup with a short
+description supplied by that mod.
 
 ## Behavior
 
@@ -24,14 +26,35 @@ game-styled settings popup.
 - Choice settings remain owned and persisted by the integrating mod through its
   own BepInEx `ConfigEntry<string>`. Mod Manager only renders the registered
   choices and updates that entry.
+- Descriptions are registered and owned by the integrating mod. Mod Manager
+  keeps no separate description catalog.
 
 There is no helper process, pending queue, DLL renaming, or filesystem mutation.
 
+## Registering a description
+
+Register the description before checking the enabled state so the info popup is
+available even when the mod is disabled for the current session.
+
+```csharp
+ModManagerApi.RegisterDescription(
+    PluginGuid,
+    "Adds a concise explanation of this mod's player-facing behavior.");
+
+if (!ModManagerApi.IsEnabled(PluginGuid))
+{
+    enabled = false;
+    return;
+}
+```
+
+Descriptions must be non-empty and should remain short enough for the popup.
+
 ## Registering a choice setting
 
-Bind and register settings before the enabled-state guard so their gear remains
-available even when the mod is inactive for the current session. Runtime hooks
-and UI still belong after the guard.
+Bind and register settings alongside the description before the enabled-state
+guard so their gear remains available even when the mod is inactive for the
+current session. Runtime hooks and UI still belong after the guard.
 
 ```csharp
 ConfigEntry<string> preset = Config.Bind(
