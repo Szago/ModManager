@@ -435,7 +435,7 @@ namespace ModManager
             TMP_Text title = UiFactory.TmpText(
                 "Title",
                 _panel.transform,
-                "MOD MANAGER",
+                "MOD MANAGER  v" + Plugin.PluginVersion,
                 64f,
                 TextAlignmentOptions.MidlineLeft,
                 HeaderText);
@@ -452,8 +452,8 @@ namespace ModManager
         private void CreateInfo()
         {
             TMP_Text info = UiFactory.TmpText("RestartInfo", _panel.transform,
-                "Changes are applied after the game restarts. The current session is not modified.",
-                36f, TextAlignmentOptions.TopLeft, MutedText);
+                "Changes are applied after the game restarts.",
+                48f, TextAlignmentOptions.TopLeft, MutedText);
             UiFactory.Rect(info.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(60f, -310f), new Vector2(-60f, -218f));
         }
