@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using BepInEx.Logging;
+using HarmonyLib;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -50,6 +51,8 @@ namespace ModManager
         private GameObject _settingsPopup;
         private GameObject _infoPopup;
         private GameObject _infoButtonTemplate;
+        private GameObject _nativeToggleOnTemplate;
+        private GameObject _nativeToggleOffTemplate;
         private bool _loggedMissingSettingsIcon;
         private bool _loggedMissingInfoButton;
 
@@ -63,6 +66,7 @@ namespace ModManager
 
         internal void Show(Transform sourceShell)
         {
+            FindNativeToggleTemplates();
             EnsureCreated(sourceShell);
             RefreshRows();
             _overlayCanvasObject.transform.SetAsLastSibling();
@@ -772,20 +776,15 @@ namespace ModManager
             infoRect.localScale = Vector3.one * 0.8f;
 
             bool desiredState = mod.DesiredEnabled;
-            Image enabledVisual;
-            Button toggle = CreateToggle(
-                row.transform,
-                desiredState,
-                out enabledVisual);
-            toggle.transform.localScale = Vector3.one * 0.8f;
-            toggle.onClick.AddListener(() =>
+            RestartToggleVisual toggle = CreateToggle(row.transform, desiredState);
+            if (toggle == null) return;
+            System.Action<bool> selectState = enabled =>
             {
-                bool enabled = !desiredState;
                 try
                 {
                     _footer.text = _registry.SetDesiredState(mod, enabled);
                     desiredState = enabled;
-                    SetToggleVisual(enabledVisual, desiredState);
+                    SetToggleVisual(toggle, desiredState);
                     status.text = StatusText(mod);
                     status.color = StatusColor(mod);
                 }
@@ -793,10 +792,12 @@ namespace ModManager
                 {
                     _logger.LogError("[ModManager] Could not change " + mod.Name + ": " + exception);
                     desiredState = mod.DesiredEnabled;
-                    SetToggleVisual(enabledVisual, desiredState);
+                    SetToggleVisual(toggle, desiredState);
                     _footer.text = "The state could not be saved. Check BepInEx\\LogOutput.log.";
                 }
-            });
+            };
+            toggle.On.onClick.AddListener(() => selectState(true));
+            toggle.Off.onClick.AddListener(() => selectState(false));
         }
 
         private Button CreateSettingsGear(Transform parent)
@@ -1495,46 +1496,176 @@ namespace ModManager
             internal TMP_Text Label { get; }
         }
 
-        private static Button CreateToggle(
-            Transform parent,
-            bool enabled,
-            out Image enabledVisual)
+        private sealed class RestartToggleVisual
+        {
+            internal Button On;
+            internal Button Off;
+        }
+
+        private RestartToggleVisual CreateToggle(Transform parent, bool enabled)
         {
             GameObject root = UiFactory.Object("RestartToggle", parent);
             UiFactory.Rect(root, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
-                new Vector2(-216f, -44f), new Vector2(-56f, 44f));
-            Image background = UiFactory.Image(root, HeaderText);
-            Outline outline = root.AddComponent<Outline>();
-            outline.effectColor = Accent;
-            outline.effectDistance = new Vector2(3f, -3f);
+                new Vector2(-236f, -44f), new Vector2(-36f, 44f));
 
-            GameObject checkObject = UiFactory.Object("Enabled", root.transform);
-            UiFactory.Rect(checkObject, Vector2.zero, Vector2.one,
-                new Vector2(10f, 10f), new Vector2(-10f, -10f));
-            Image check = UiFactory.Image(
-                checkObject,
-                new Color(233f / 255f, 155f / 255f, 22f / 255f, 1f),
-                false);
+            RestartToggleVisual result = CreateNativeTogglePair(root.transform);
+            if (result == null)
+            {
+                TMP_Text unavailable = UiFactory.TmpText("Unavailable", root.transform,
+                    "Unavailable", 24f, TextAlignmentOptions.Center, HeaderText);
+                UiFactory.Rect(unavailable.gameObject, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                return null;
+            }
+            SetToggleVisual(result, enabled);
+            return result;
+        }
 
-            Button button = root.AddComponent<Button>();
-            button.targetGraphic = background;
-            button.transition = Selectable.Transition.ColorTint;
-            ColorBlock colors = button.colors;
-            colors.normalColor = Color.white;
-            colors.highlightedColor = new Color(1f, 0.88f, 0.55f, 1f);
-            colors.pressedColor = new Color(0.82f, 0.58f, 0.16f, 1f);
-            colors.selectedColor = colors.highlightedColor;
-            button.colors = colors;
-            button.interactable = true;
-            enabledVisual = check;
-            SetToggleVisual(enabledVisual, enabled);
+        private RestartToggleVisual CreateNativeTogglePair(Transform parent)
+        {
+            if (_nativeToggleOnTemplate == null || _nativeToggleOffTemplate == null)
+                return null;
+
+            GameObject onObject = CloneInactive(_nativeToggleOnTemplate, parent);
+            GameObject offObject = CloneInactive(_nativeToggleOffTemplate, parent);
+            if (onObject == null || offObject == null)
+            {
+                if (onObject != null) Object.Destroy(onObject);
+                if (offObject != null) Object.Destroy(offObject);
+                return null;
+            }
+
+            onObject.name = "On";
+            offObject.name = "Off";
+            Button on = SanitizeNativeToggle(onObject);
+            Button off = SanitizeNativeToggle(offObject);
+            if (on == null || off == null)
+            {
+                _logger.LogWarning("[ModManager] Audio clones contain no Unity Button: " +
+                    NativeControlPath(_nativeToggleOnTemplate.transform) + " / " +
+                    NativeControlPath(_nativeToggleOffTemplate.transform));
+                Object.Destroy(onObject);
+                Object.Destroy(offObject);
+                return null;
+            }
+
+            FitNativeToggle(onObject, _nativeToggleOnTemplate, 0.25f);
+            FitNativeToggle(offObject, _nativeToggleOffTemplate, 0.75f);
+            onObject.SetActive(true);
+            offObject.SetActive(true);
+            return new RestartToggleVisual
+            {
+                On = on,
+                Off = off
+            };
+        }
+
+        private static void FitNativeToggle(GameObject clone, GameObject source, float anchorX)
+        {
+            RectTransform sourceRect = source.GetComponent<RectTransform>();
+            RectTransform rect = clone.GetComponent<RectTransform>();
+            Vector2 size = sourceRect.rect.size;
+            rect.anchorMin = rect.anchorMax = new Vector2(anchorX, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = size;
+            rect.anchoredPosition = Vector2.zero;
+            float scale = Mathf.Min(94f / Mathf.Max(1f, size.x), 88f / Mathf.Max(1f, size.y));
+            rect.localScale = Vector3.one * scale;
+        }
+
+        private static GameObject CloneInactive(GameObject template, Transform parent)
+        {
+            bool wasActive = template.activeSelf;
+            template.SetActive(false);
+            try { return Object.Instantiate(template, parent, false); }
+            finally { template.SetActive(wasActive); }
+        }
+
+        private static Button SanitizeNativeToggle(GameObject root)
+        {
+            Button button = root.GetComponent<Button>() ?? root.GetComponentInChildren<Button>(true);
+            if (button == null)
+                return null;
+
+            // Keep the serialized sprites, colors, materials, text and Button
+            // transition. GameSettings selects these controls via interactable.
+            foreach (MonoBehaviour component in root.GetComponentsInChildren<MonoBehaviour>(true))
+            {
+                if (component is Graphic || component is Selectable || component is BaseMeshEffect)
+                    continue;
+                if (component is ToggleButton toggle)
+                    AccessTools.Field(typeof(ToggleButton), "toggleGroup")?.SetValue(toggle, null);
+                Object.DestroyImmediate(component);
+            }
+            button.onClick = new Button.ButtonClickedEvent();
+            button.navigation = new Navigation { mode = Navigation.Mode.None };
+            foreach (Graphic graphic in root.GetComponentsInChildren<Graphic>(true))
+                graphic.raycastTarget = graphic == button.targetGraphic;
             return button;
         }
 
-        private static void SetToggleVisual(Image visual, bool enabled)
+        private void FindNativeToggleTemplates()
         {
-            if (visual != null)
-                visual.gameObject.SetActive(enabled);
+            if (_nativeToggleOnTemplate != null && _nativeToggleOffTemplate != null)
+                return;
+            // Resolve the actual serialized PC audio controls before relying on
+            // display names or the number of nested Panel_Settings transforms.
+            foreach (GameSettings settings in Resources.FindObjectsOfTypeAll<GameSettings>())
+            {
+                if (settings == null || !settings.gameObject.scene.IsValid()) continue;
+                Button musicOn = AccessTools.Field(typeof(GameSettings), "btn_MusicOn_pc")?.GetValue(settings) as Button;
+                Button musicOff = AccessTools.Field(typeof(GameSettings), "btn_MusicOff_pc")?.GetValue(settings) as Button;
+                if (musicOn == null || musicOff == null) continue;
+                _nativeToggleOnTemplate = musicOn.gameObject;
+                _nativeToggleOffTemplate = musicOff.gameObject;
+                _logger.LogInfo("[ModManager] Native PC audio sources: ON=" + NativeControlPath(musicOn.transform) +
+                    "; OFF=" + NativeControlPath(musicOff.transform));
+                return;
+            }
+            const string basePath = "Canvas_Settings/Panel_Settings/Panel_Settings/" +
+                "Panel_Settings/LeftSide/View/Content/Panel MusicSound/PC&WebAudio/Panel SettingOnOff/";
+            GameObject on = GameObject.Find(basePath + "ButtonOnOff");
+            GameObject off = GameObject.Find(basePath + "ButtonOnOff (1)");
+            if (on != null && off != null)
+            {
+                _nativeToggleOnTemplate = on;
+                _nativeToggleOffTemplate = off;
+                return;
+            }
+
+            // GameObject.Find skips inactive objects; traverse the exact path
+            // beneath the loaded Settings canvas, even when its children hide.
+            foreach (RectTransform candidate in Resources.FindObjectsOfTypeAll<RectTransform>())
+            {
+                if (candidate == null || !candidate.gameObject.scene.IsValid() ||
+                    candidate.name != "Canvas_Settings")
+                    continue;
+                string relativePath = basePath.Substring("Canvas_Settings/".Length);
+                Transform onTransform = candidate.Find(relativePath + "ButtonOnOff");
+                Transform offTransform = candidate.Find(relativePath + "ButtonOnOff (1)");
+                if (onTransform == null || offTransform == null) continue;
+                _nativeToggleOnTemplate = onTransform.gameObject;
+                _nativeToggleOffTemplate = offTransform.gameObject;
+                return;
+            }
+            _logger.LogWarning("[ModManager] Native PC audio controls are not loaded. " +
+                "Individual On/Off controls are unavailable; reopening the manager retries discovery.");
+        }
+
+        private static string NativeControlPath(Transform transform)
+        {
+            string path = transform.name;
+            while (transform.parent != null)
+            {
+                transform = transform.parent;
+                path = transform.name + "/" + path;
+            }
+            return path;
+        }
+
+        private static void SetToggleVisual(RestartToggleVisual visual, bool enabled)
+        {
+            visual.On.interactable = !enabled;
+            visual.Off.interactable = enabled;
         }
 
         private static string StatusText(ManagedMod mod)

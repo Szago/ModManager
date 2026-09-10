@@ -13,6 +13,11 @@ description supplied by that mod.
 ## Behavior
 
 - Toggling a mod never unloads or starts it in the current game session.
+- Native On/Off controls are cloned from the PC audio buttons referenced by
+  GameSettings (`btn_MusicOn_pc` / `btn_MusicOff_pc`). Their serialized artwork
+  and transitions are preserved; `interactable` selects the native green/red
+  appearance. Original audio callbacks are removed. Discovery failures leave
+  the manager usable and retry on reopening.
 - Desired states are ordinary Boolean entries in
   `BepInEx/config/ModManager.states.cfg`.
 - On the next launch, an integrated mod calls
@@ -92,7 +97,7 @@ Offline checks (mock HTTP and real temporary DLL replacement; no live game write
 dotnet run --project mods/ModManager/tests/UpdateChecks.csproj -c Release
 ```
 
-Version 2.3.4 is the user-confirmed working visual baseline. Release URLs remain
+Version 2.3.7 is the user-confirmed working baseline with native On/Off controls. Release URLs remain
 empty; a real GitHub release download/restart test is still needed once
 repositories are published.
 
