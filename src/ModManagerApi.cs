@@ -67,6 +67,33 @@ namespace ModManager
             return entry;
         }
 
+        internal static void SetConfiguredStates(IEnumerable<string> guids, bool enabled)
+        {
+            lock (Sync)
+            {
+                bool saveOnSet = StateFile.SaveOnConfigSet;
+                var previous = new Dictionary<ConfigEntry<bool>, bool>();
+                StateFile.SaveOnConfigSet = false;
+                try
+                {
+                    foreach (string guid in guids)
+                        if (!string.Equals(guid, ManagerGuid, StringComparison.OrdinalIgnoreCase))
+                        {
+                            ConfigEntry<bool> entry = GetEntry(guid);
+                            previous[entry] = entry.Value;
+                            entry.Value = enabled;
+                        }
+                    StateFile.Save();
+                }
+                catch
+                {
+                    foreach (var pair in previous) pair.Key.Value = pair.Value;
+                    throw;
+                }
+                finally { StateFile.SaveOnConfigSet = saveOnSet; }
+            }
+        }
+
         private static ConfigFile StateFile =>
             _stateFile ?? (_stateFile = new ConfigFile(StateFilePath, true));
 

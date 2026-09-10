@@ -67,6 +67,12 @@ namespace ModManager
             return "Saved. The new state will apply after the game restarts.";
         }
 
+        internal void SetAllDesiredStates(bool enabled)
+        {
+            ModManagerApi.SetConfiguredStates(_mods.Keys, enabled);
+            foreach (ManagedMod mod in _mods.Values) mod.DesiredEnabled = enabled;
+        }
+
         private static bool UsesModManagerApi(PluginInfo info)
         {
             return info.Dependencies.Any(dependency =>

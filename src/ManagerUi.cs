@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 namespace ModManager
 {
-    internal sealed class ManagerUi
+    internal sealed partial class ManagerUi
     {
         private static readonly Color RowColor = new Color(0.18f, 0.12f, 0.06f, 0.96f);
         private static readonly Color MutedText = new Color(0.72f, 0.68f, 0.58f, 1f);
@@ -53,10 +53,11 @@ namespace ModManager
         private bool _loggedMissingSettingsIcon;
         private bool _loggedMissingInfoButton;
 
-        internal ManagerUi(ManualLogSource logger, ModRegistry registry)
+        internal ManagerUi(ManualLogSource logger, ModRegistry registry, UpdateService updates)
         {
             _logger = logger;
             _registry = registry;
+            _updates = updates;
             _assets = new UiAssets(logger);
         }
 
@@ -77,6 +78,12 @@ namespace ModManager
             }
             Canvas.ForceUpdateCanvases();
             UpdateGridLayout();
+            // Generate text only after activation and the final row/header sizes
+            // are available. Early color setup can otherwise leave an empty mesh.
+            foreach (TMP_Text text in _panel.GetComponentsInChildren<TMP_Text>())
+                if (text.isActiveAndEnabled)
+                    text.ForceMeshUpdate(false, true);
+            FitVisibleUpdateLabels();
             _sourceSettingsCanvasObject.SetActive(false);
         }
 
@@ -432,16 +439,23 @@ namespace ModManager
 
         private void CreateHeader()
         {
+            GameObject header = UiFactory.Object("HeaderRow", _panel.transform);
+            UiFactory.Rect(header, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(64f, -184f), new Vector2(-170f, -40f));
             TMP_Text title = UiFactory.TmpText(
                 "Title",
-                _panel.transform,
-                "MOD MANAGER  v" + Plugin.PluginVersion,
+                header.transform,
+                "MOD MANAGER",
                 64f,
                 TextAlignmentOptions.MidlineLeft,
                 HeaderText);
             title.fontStyle = FontStyles.Bold;
-            UiFactory.Rect(title.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(64f, -184f), new Vector2(-170f, -40f));
+            _headerTitle = title;
+            ForceTmpColor(title, HeaderText);
+            // TMP preferred widths are not reliable before this inactive shell
+            // has completed its first layout. Keep a real initial text area.
+            LayoutSlot(title.gameObject, 600f, 110f);
+            CreateUpdateControls(header.transform, Plugin.PluginGuid, true);
 
             GameObject line = UiFactory.Object("HeaderLine", _panel.transform);
             UiFactory.Rect(line, new Vector2(0f, 1f), new Vector2(1f, 1f),
@@ -455,7 +469,9 @@ namespace ModManager
                 "Changes are applied after the game restarts.",
                 48f, TextAlignmentOptions.TopLeft, MutedText);
             UiFactory.Rect(info.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(60f, -310f), new Vector2(-60f, -218f));
+                new Vector2(60f, -310f), new Vector2(-900f, -218f));
+            info.enableWordWrapping = true;
+            CreateBulkControls();
         }
 
         private void Hide()
@@ -477,10 +493,12 @@ namespace ModManager
                 Object.Destroy(row);
             }
             _rows.Clear();
+            _updateControls.RemoveAll(control => !control.IsHeader);
             foreach (ManagedMod mod in _registry.Mods) CreateModRow(mod);
+            RefreshUpdateControls();
             _footer.text = _registry.Mods.Count == 0
                 ? "No mods integrated with the Mod Manager API were found."
-                : "Only API-integrated mods appear here. Mod Manager is always enabled.";
+                : _updates.Message ?? "";
         }
 
         private void CreateList()
@@ -682,6 +700,17 @@ namespace ModManager
                 MutedText);
             UiFactory.Rect(_footer.gameObject, Vector2.zero, new Vector2(1f, 0f),
                 new Vector2(60f, 70f), new Vector2(-60f, 190f));
+
+            // The injected panel is inset 55px from the native shell's bottom.
+            // Use that lower frame strip for the permanent note, independently
+            // of operation/status messages in the inner footer above it.
+            TMP_Text apiNote = UiFactory.TmpText("ApiIntegrationNote", _panel.transform,
+                "Only API-integrated mods appear here. Mod Manager is always enabled.",
+                48f, TextAlignmentOptions.MidlineLeft, Color.white);
+            UiFactory.Rect(apiNote.gameObject, Vector2.zero, new Vector2(1f, 0f),
+                new Vector2(60f, -40f), new Vector2(-60f, 80f));
+            apiNote.overflowMode = TextOverflowModes.Overflow;
+            ForceTmpColor(apiNote, Color.white);
         }
 
         private void CreateModRow(ManagedMod mod)
@@ -705,21 +734,16 @@ namespace ModManager
             element.minHeight = 188f;
 
             TMP_Text name = UiFactory.TmpText("Name", row.transform,
-                mod.Name + (string.IsNullOrEmpty(mod.Version) ? "" : "  v" + mod.Version),
+                mod.Name,
                 44f, TextAlignmentOptions.MidlineLeft, Color.white);
             name.fontStyle = FontStyles.Bold;
             UiFactory.Rect(name.gameObject, Vector2.zero, Vector2.one,
                 new Vector2(36f, 84f), new Vector2(textRightInset, -16f));
 
-            TMP_Text identity = UiFactory.TmpText(
-                "Guid",
-                row.transform,
-                mod.Guid,
-                28f,
-                TextAlignmentOptions.MidlineLeft,
-                MutedText);
-            UiFactory.Rect(identity.gameObject, Vector2.zero, Vector2.one,
-                new Vector2(36f, 40f), new Vector2(textRightInset, -96f));
+            GameObject updateLine = UiFactory.Object("UpdateLine", row.transform);
+            UiFactory.Rect(updateLine, Vector2.zero, new Vector2(1f, 0f),
+                new Vector2(36f, 40f), new Vector2(textRightInset, 94f));
+            CreateUpdateControls(updateLine.transform, mod.Guid, false);
 
             TMP_Text status = UiFactory.TmpText(
                 "Status",
@@ -736,6 +760,7 @@ namespace ModManager
             {
                 Button gear = CreateSettingsGear(row.transform);
                 RectTransform gearRect = gear.GetComponent<RectTransform>();
+                gearRect.localScale = Vector3.one * 0.8f;
                 gear.onClick.AddListener(() =>
                     ShowSettingsPopup(mod, settings, gearRect));
             }
@@ -744,6 +769,7 @@ namespace ModManager
                 row.transform,
                 out RectTransform infoRect);
             info.onClick.AddListener(() => ShowInfoPopup(mod, infoRect));
+            infoRect.localScale = Vector3.one * 0.8f;
 
             bool desiredState = mod.DesiredEnabled;
             Image enabledVisual;
@@ -751,6 +777,7 @@ namespace ModManager
                 row.transform,
                 desiredState,
                 out enabledVisual);
+            toggle.transform.localScale = Vector3.one * 0.8f;
             toggle.onClick.AddListener(() =>
             {
                 bool enabled = !desiredState;
@@ -857,11 +884,15 @@ namespace ModManager
             GameObject template = FindInfoButtonTemplate();
             if (template != null)
             {
-                GameObject clone = Object.Instantiate(
-                    template,
-                    parent,
-                    false);
-                clone.SetActive(false);
+                // Inactive BEFORE Instantiate, including when rows are rebuilt
+                // under the open panel. Uninjected game scripts must never enter
+                // their active lifecycle (HelpPopupOpenerButton.OnDestroy assumes
+                // its injected private Button has been initialized).
+                bool templateWasActive = template.activeSelf;
+                GameObject clone;
+                template.SetActive(false);
+                try { clone = Object.Instantiate(template, parent, false); }
+                finally { template.SetActive(templateWasActive); }
                 clone.name = "InfoButton";
 
                 Button button = clone.GetComponent<Button>() ??
@@ -1410,8 +1441,11 @@ namespace ModManager
                 text.fontMaterial.SetColor(
                     ShaderUtilities.ID_FaceColor,
                     Color.white);
-            text.ForceMeshUpdate(true, true);
-            text.UpdateVertexData(TMP_VertexDataUpdateFlags.Colors32);
+            // New header/row labels are created under an inactive shell, before
+            // TMP initializes their mesh. Let activation rebuild those labels;
+            // only regenerate immediately for text that is already active.
+            if (text.isActiveAndEnabled)
+                text.ForceMeshUpdate();
             text.SetVerticesDirty();
         }
 

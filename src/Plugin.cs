@@ -11,7 +11,8 @@ namespace ModManager
     {
         public const string PluginGuid = "com.eros.modmanager";
         public const string PluginName = "Mod Manager";
-        public const string PluginVersion = "2.2.1";
+        public const string PluginVersion = "2.3.4";
+        public const string PluginReleasesUrl = "";
 
         private const float UiScanInterval = 5f;
 
@@ -26,15 +27,18 @@ namespace ModManager
         private float _nextUiScan;
         private ModRegistry _registry;
         private ManagerUi _managerUi;
+        private UpdateService _updates;
 
         internal static Plugin Instance { get; private set; }
 
         private void Awake()
         {
             Instance = this;
+            ModManagerApi.RegisterReleaseSource(PluginGuid, PluginReleasesUrl, "ModManager.dll");
+            _updates = new UpdateService(Logger);
             _registry = new ModRegistry();
             _registry.Discover();
-            _managerUi = new ManagerUi(Logger, _registry);
+            _managerUi = new ManagerUi(Logger, _registry, _updates);
             new Harmony(PluginGuid).PatchAll();
 
             Application.onBeforeRender -= TickPersistentRuntime;
@@ -43,6 +47,8 @@ namespace ModManager
 
         private void PersistentUpdate()
         {
+            _updates.Tick();
+            _managerUi.TickUpdates();
             float now = Time.realtimeSinceStartup;
             try
             {

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net471</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>ModManager.Updater</AssemblyName>
+    <Version>1.0.0</Version>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>$(ErosArtifactsDir)\ModManager.Updater\$(Configuration)\</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\shared\PendingUpdate.cs" Link="PendingUpdate.cs" />
+    <Reference Include="BepInEx"><HintPath>$(ErosBepInExCoreDir)\BepInEx.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Mono.Cecil"><HintPath>$(ErosBepInExCoreDir)\Mono.Cecil.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>

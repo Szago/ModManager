@@ -4,7 +4,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>ModManager</AssemblyName>
     <RootNamespace>ModManager</RootNamespace>
-    <Version>2.2.1</Version>
+    <Version>2.3.4</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>$(ErosArtifactsDir)\$(MSBuildProjectName)\$(Configuration)\</OutputPath>
@@ -13,10 +13,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="updater\**\*.cs;tests\**\*.cs" />
+    <ProjectReference Include="updater\ModManager.Updater.csproj" ReferenceOutputAssembly="false" />
+    <EmbeddedResource Include="$(ErosArtifactsDir)\ModManager.Updater\$(Configuration)\ModManager.Updater.dll" LogicalName="ModManager.Updater.dll" />
     <EmbeddedResource Include="assets\*" />
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="UnityEngine.AnimationModule"><HintPath>$(ErosManagedDir)\UnityEngine.AnimationModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Mono.Cecil"><HintPath>$(ErosBepInExCoreDir)\Mono.Cecil.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Newtonsoft.Json"><HintPath>$(ErosManagedDir)\Newtonsoft.Json.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>$(ErosManagedDir)\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>

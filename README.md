@@ -29,7 +29,72 @@ description supplied by that mod.
 - Descriptions are registered and owned by the integrating mod. Mod Manager
   keeps no separate description catalog.
 
-There is no helper process, pending queue, DLL renaming, or filesystem mutation.
+Enabling/disabling still only writes config. Updates are a separate, explicit
+download-and-restart operation; no external executable is used.
+
+## GitHub updates (2.3.0)
+
+Each mod owns its release source, registered before its enabled-state guard:
+
+```csharp
+public const string PluginReleasesUrl = ""; // Fill when the repository is published.
+// Later: https://github.com/OWNER/REPOSITORY/releases
+ModManagerApi.RegisterReleaseSource(PluginGuid, PluginReleasesUrl, "MyMod.dll");
+```
+
+Clients using this API require `[BepInDependency(ModManagerApi.ManagerGuid, "2.3.0")]`.
+The empty URL intentionally displays `Not configured` and makes no request.
+The asset name is exact and case-sensitive. Publish a public, stable GitHub
+release tagged `v1.2.3` (or `1.2.3`), matching the DLL's BepInPlugin version,
+and upload the named DLL. ZIP assets and prerelease tags are not supported.
+Do not bundle multiple BepInEx plugins into one asset. Keep assembly names and
+GUIDs stable. Release URLs cannot point to arbitrary download hosts.
+
+Rows show name, then version / info-style refresh button / update status /
+Update when newer. Mod Manager has equivalent controls in the header. The
+restart-note bar has Update all, Check for updates, and Toggle all. Update all
+checks before downloading and includes Mod Manager. Toggle all enables all
+listed mods when any are off, otherwise disables all; it never toggles the
+manager or BepInEx. No requests run automatically on opening the panel.
+
+Checks use GitHub's unauthenticated latest-release API, skip prereleases, cache
+successful checks for one minute, and report missing releases, bad assets,
+network failures, and rate limits without claiming the mod is up to date.
+Downloads run off the Unity thread and are capped at 64 MiB per DLL. Validate
+the release size, SHA-256 digest when GitHub supplies it, assembly identity,
+plugin GUID and plugin version before accepting a download.
+
+`ModManager.dll` embeds `ModManager.Updater.dll`. On first load it installs this
+small BepInEx startup component into `BepInEx/patchers/ModManager/`. Release
+distribution still needs just ModManager.dll; the updater has no plugin entry
+or toggle. The startup component has a stable v1 manifest contract and is not
+itself remotely updated in this iteration.
+
+Downloads go into `BepInEx/ModManagerUpdates/<unique-id>/` as payload.bin and
+pending.xml. On the next launch, before plugin discovery, the startup component
+checks hashes again and atomically replaces only the recorded installed plugin
+DLL. The current DLL must still match the one seen at download time. A previous.bin
+backup and applied.xml receipt remain in that folder. An interrupted replacement
+can resume safely. Failed installs leave pending.xml and log an error, preserving
+the installed DLL. For manual recovery, close the game, inspect the manifest's
+RelativeTarget, and restore previous.bin to that exact plugins path; remove only
+that update's pending.xml to cancel a blocked pending install. Backups are retained
+until manually removed. Neither configs nor unrelated files are updated.
+
+Publish compatible mod/manager versions together. The updater validates identity,
+not game-version compatibility or arbitrary third-party dependency graphs.
+Update all handles the manager before clients; do not publish a client requiring
+a manager release that is not also available.
+
+Offline checks (mock HTTP and real temporary DLL replacement; no live game writes):
+
+```powershell
+dotnet run --project mods/ModManager/tests/UpdateChecks.csproj -c Release
+```
+
+Version 2.3.4 is the user-confirmed working visual baseline. Release URLs remain
+empty; a real GitHub release download/restart test is still needed once
+repositories are published.
 
 ## Registering a description
 

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>SYSLIB0014</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="UpdateChecks.cs;Stubs.cs;..\shared\PendingUpdate.cs;..\src\ModUpdateApi.cs;..\src\UpdateService.cs;..\updater\Patcher.cs" />
+    <Reference Include="Mono.Cecil"><HintPath>$(ErosBepInExCoreDir)\Mono.Cecil.dll</HintPath></Reference>
+    <Reference Include="Newtonsoft.Json"><HintPath>$(ErosManagedDir)\Newtonsoft.Json.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>
