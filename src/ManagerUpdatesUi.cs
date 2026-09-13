@@ -100,9 +100,8 @@ namespace ModManager
             // now can collapse their width to zero and hide the whole string.
             LayoutSlot(version.gameObject, header ? 150f : 116f, header ? 80f : 54f);
 
-            Button refresh = CreateInfoButton(parent, out RectTransform refreshRect);
-            refreshRect.name = "CheckForUpdate";
-            LayoutSlot(refreshRect.gameObject, 50f, 50f);
+            Button refresh = CreateRefreshButton(parent, out RectTransform refreshRect);
+            LayoutSlot(refreshRect.gameObject, 75f, 75f);
             refresh.onClick.AddListener(() => _updates.Check(new[] { guid }, false));
 
             TMP_Text status = UiFactory.TmpText("UpdateStatus", parent, state?.Status ?? "Not configured",
@@ -117,6 +116,44 @@ namespace ModManager
             {
                 Guid = guid, IsHeader = header, Version = version, Status = status, Refresh = refresh, Update = update
             });
+        }
+
+        private Button CreateRefreshButton(
+            Transform parent,
+            out RectTransform buttonRect)
+        {
+            _refreshIconSprite = _refreshIconSprite ??
+                                 _assets.LoadEmbeddedSprite(
+                                     "UI_Icon_Refresh.png",
+                                     0f);
+            if (_refreshIconSprite == null)
+                return CreateInfoButton(parent, out buttonRect);
+
+            GameObject root = UiFactory.Object("CheckForUpdate", parent);
+            buttonRect = UiFactory.Rect(
+                root,
+                new Vector2(1f, 0.5f),
+                new Vector2(1f, 0.5f),
+                new Vector2(-336f, -42f),
+                new Vector2(-248f, 42f));
+            Image image = UiFactory.Image(root, Color.white);
+            image.sprite = _refreshIconSprite;
+            image.preserveAspect = true;
+
+            Button button = root.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.transition = Selectable.Transition.ColorTint;
+            button.navigation = new Navigation
+            {
+                mode = Navigation.Mode.None
+            };
+            ColorBlock colors = button.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(1f, 0.92f, 0.72f, 1f);
+            colors.pressedColor = new Color(0.80f, 0.68f, 0.58f, 1f);
+            colors.selectedColor = colors.highlightedColor;
+            button.colors = colors;
+            return button;
         }
 
         private static LayoutElement LayoutSlot(GameObject target, float width, float height)

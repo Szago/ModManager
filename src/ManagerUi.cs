@@ -48,6 +48,7 @@ namespace ModManager
         private Sprite _rowBackgroundSprite;
         private Sprite _roundedScrollbarSprite;
         private Sprite _settingsIconSprite;
+        private Sprite _refreshIconSprite;
         private GameObject _settingsPopup;
         private GameObject _infoPopup;
         private GameObject _infoButtonTemplate;
