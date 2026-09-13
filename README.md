@@ -42,8 +42,7 @@ download-and-restart operation; no external executable is used.
 Each mod owns its release source, registered before its enabled-state guard:
 
 ```csharp
-public const string PluginReleasesUrl = ""; // Fill when the repository is published.
-// Later: https://github.com/OWNER/REPOSITORY/releases
+public const string PluginReleasesUrl = "https://github.com/OWNER/REPOSITORY/releases";
 ModManagerApi.RegisterReleaseSource(PluginGuid, PluginReleasesUrl, "MyMod.dll");
 ```
 
@@ -97,9 +96,10 @@ Offline checks (mock HTTP and real temporary DLL replacement; no live game write
 dotnet run --project mods/ModManager/tests/UpdateChecks.csproj -c Release
 ```
 
-Version 2.3.7 is the user-confirmed working baseline with native On/Off controls. Release URLs remain
-empty; a real GitHub release download/restart test is still needed once
-repositories are published.
+Version 2.3.8 is the GitHub-update bootstrap build based on the user-confirmed
+2.3.7 native On/Off baseline. Its release source is
+`https://github.com/Szago/ModManager/releases`; a real GitHub
+download/restart test remains pending.
 
 ## Registering a description
 
